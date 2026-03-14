@@ -1,71 +1,136 @@
 <template>
   <div class="sidebar">
-    <el-menu
-      :default-active="activeMenu"
-      class="sidebar-menu"
-      @select="handleSelect"
-    >
-      <el-menu-item index="/">
-        <el-icon><Odometer /></el-icon>
-        <span>Dashboard</span>
-      </el-menu-item>
-      <el-menu-item index="/sources">
-        <el-icon><Download /></el-icon>
-        <span>Sources</span>
-      </el-menu-item>
-      <el-menu-item index="/config">
-        <el-icon><Document /></el-icon>
-        <span>Config</span>
-      </el-menu-item>
-      <el-menu-item index="/proxies">
-        <el-icon><Connection /></el-icon>
-        <span>Proxies</span>
-      </el-menu-item>
-      <el-menu-item index="/mihomo">
-        <el-icon><Monitor /></el-icon>
-        <span>Mihomo</span>
-      </el-menu-item>
-      <el-menu-item index="/logs">
-        <el-icon><Tickets /></el-icon>
-        <span>Logs</span>
-      </el-menu-item>
-      <el-menu-item index="/settings">
-        <el-icon><Setting /></el-icon>
-        <span>Settings</span>
-      </el-menu-item>
-    </el-menu>
+    <div class="sidebar-logo">
+      <div class="logo-icon">P</div>
+      <span class="logo-text">Proxyd</span>
+    </div>
+
+    <nav class="nav">
+      <router-link
+        v-for="item in navItems"
+        :key="item.path"
+        :to="item.path"
+        class="nav-item"
+        :class="{ active: isActive(item.path) }"
+      >
+        <el-icon class="nav-icon"><component :is="item.icon" /></el-icon>
+        <span class="nav-label">{{ item.label }}</span>
+      </router-link>
+    </nav>
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue'
-import { useRouter, useRoute } from 'vue-router'
-import { Odometer, Download, Document, Connection, Setting, Monitor, Tickets } from '@element-plus/icons-vue'
+import { useRoute } from 'vue-router'
+import {
+  Odometer, Download, Document, Connection,
+  Monitor, Tickets, Setting
+} from '@element-plus/icons-vue'
 
-const router = useRouter()
 const route = useRoute()
 
-const activeMenu = computed(() => route.path)
+const navItems = [
+  { path: '/',        label: 'Dashboard', icon: Odometer  },
+  { path: '/sources', label: 'Sources',   icon: Download  },
+  { path: '/config',  label: 'Config',    icon: Document  },
+  { path: '/proxies', label: 'Proxies',   icon: Connection },
+  { path: '/mihomo',  label: 'Mihomo',    icon: Monitor   },
+  { path: '/logs',    label: 'Logs',      icon: Tickets   },
+  { path: '/settings',label: 'Settings',  icon: Setting   },
+]
 
-const handleSelect = (key: string) => {
-  router.push(key)
+const isActive = (path: string) => {
+  if (path === '/') return route.path === '/'
+  return route.path.startsWith(path)
 }
 </script>
 
 <style scoped>
 .sidebar {
   width: 200px;
-  height: calc(100vh - 60px);
-  background: #fff;
-  border-right: 1px solid #e4e7ed;
-  overflow-y: auto;
+  min-width: 200px;
+  height: 100vh;
+  background: var(--cv-sidebar);
+  border-right: 1px solid var(--cv-border);
+  display: flex;
+  flex-direction: column;
+  padding: 0 10px 20px;
+  overflow: hidden;
 }
 
-.sidebar-menu {
-  border: none;
+/* Logo */
+.sidebar-logo {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 20px 10px 16px;
+  border-bottom: 1px solid var(--cv-border);
+  margin-bottom: 10px;
 }
 
-.sidebar-menu:not(.el-menu--collapse) {
-  width: 200px;
+.logo-icon {
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  background: var(--cv-accent);
+  color: #fff;
+  font-size: 14px;
+  font-weight: 800;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 0 12px rgba(88,101,242,0.4);
+}
+
+.logo-text {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--cv-text);
+  letter-spacing: 0.5px;
+}
+
+/* Nav */
+.nav {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1;
+}
+
+.nav-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 12px;
+  border-radius: var(--cv-radius-sm);
+  color: var(--cv-text-muted);
+  text-decoration: none;
+  font-size: 13.5px;
+  font-weight: 500;
+  transition: all 0.15s ease;
+  cursor: pointer;
+}
+
+.nav-item:hover {
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--cv-text);
+}
+
+.nav-item.active {
+  background: var(--cv-accent-soft);
+  color: var(--cv-accent);
+}
+
+.nav-item.active .nav-icon {
+  color: var(--cv-accent);
+}
+
+.nav-icon {
+  font-size: 16px;
+  flex-shrink: 0;
+}
+
+.nav-label {
+  white-space: nowrap;
 }
 </style>

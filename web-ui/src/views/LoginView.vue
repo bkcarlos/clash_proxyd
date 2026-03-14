@@ -3,7 +3,7 @@
     <el-card class="login-card">
       <template #header>
         <div class="card-header">
-          <h1>Proxyd</h1>
+          <h1>Proxy<span class="accent">d</span></h1>
           <p>Mihomo Proxy Manager</p>
         </div>
       </template>
@@ -105,42 +105,49 @@ const handleLogin = async () => {
   justify-content: center;
   align-items: center;
   height: 100vh;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: var(--cv-bg);
+  background-image:
+    radial-gradient(ellipse at 20% 50%, rgba(88,101,242,0.12) 0%, transparent 60%),
+    radial-gradient(ellipse at 80% 20%, rgba(88,101,242,0.08) 0%, transparent 50%);
 }
 
 .login-card {
-  width: 400px;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+  width: 380px;
+  background: var(--cv-surface) !important;
+  border: 1px solid var(--cv-border) !important;
+  border-radius: 14px !important;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.5) !important;
 }
 
 .card-header {
   text-align: center;
+  padding: 8px 0 4px;
 }
 
 .card-header h1 {
-  margin: 0 0 5px 0;
-  font-size: 28px;
-  color: #409eff;
+  margin: 0 0 4px;
+  font-size: 26px;
+  font-weight: 700;
+  color: var(--cv-text);
+  letter-spacing: 1px;
 }
+
+.accent { color: var(--cv-accent); }
 
 .card-header p {
   margin: 0;
-  font-size: 14px;
-  color: #909399;
+  font-size: 13px;
+  color: var(--cv-text-muted);
 }
 
 .login-footer {
-  margin-top: 20px;
+  margin-top: 16px;
   text-align: center;
   font-size: 12px;
-  color: #909399;
+  color: var(--cv-text-muted);
 }
 
-.login-footer p {
-  margin: 5px 0;
-}
+.login-footer p { margin: 4px 0; }
 
-.warning {
-  color: #f56c6c;
-}
+.warning { color: #f87171; }
 </style>

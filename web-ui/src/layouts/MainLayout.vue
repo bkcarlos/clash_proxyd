@@ -1,8 +1,8 @@
 <template>
   <div class="main-layout">
-    <Header />
+    <Sidebar />
     <div class="layout-body">
-      <Sidebar />
+      <Header />
       <div class="content">
         <router-view />
       </div>
@@ -18,21 +18,22 @@ import Sidebar from '@/components/Sidebar.vue'
 <style scoped>
 .main-layout {
   display: flex;
-  flex-direction: column;
   height: 100vh;
+  background: var(--cv-bg);
   overflow: hidden;
 }
 
 .layout-body {
-  display: flex;
   flex: 1;
+  display: flex;
+  flex-direction: column;
   overflow: hidden;
 }
 
 .content {
   flex: 1;
-  padding: 20px;
+  padding: 20px 24px;
   overflow-y: auto;
-  background: #f5f7fa;
+  background: var(--cv-bg);
 }
 </style>

@@ -1,29 +1,20 @@
 <template>
   <div class="header">
-    <div class="header-left">
-      <h1 class="title">Proxyd</h1>
-      <span class="subtitle">Mihomo Proxy Manager</span>
-    </div>
+    <div class="header-title">{{ pageTitle }}</div>
     <div class="header-right">
-      <el-dropdown @command="handleCommand">
-        <span class="user-dropdown">
-          <el-icon><User /></el-icon>
-          {{ userStore.username }}
-          <el-icon class="el-icon--right"><arrow-down /></el-icon>
-        </span>
+      <el-dropdown @command="handleCommand" trigger="click">
+        <div class="user-btn">
+          <div class="user-avatar">{{ userInitial }}</div>
+          <span class="user-name">{{ userStore.username }}</span>
+          <el-icon style="font-size:12px;color:var(--cv-text-muted)"><ArrowDown /></el-icon>
+        </div>
         <template #dropdown>
           <el-dropdown-menu>
-            <el-dropdown-item command="profile">
-              <el-icon><User /></el-icon>
-              Profile
-            </el-dropdown-item>
             <el-dropdown-item command="settings">
-              <el-icon><Setting /></el-icon>
-              Settings
+              <el-icon><Setting /></el-icon>Settings
             </el-dropdown-item>
             <el-dropdown-item divided command="logout">
-              <el-icon><SwitchButton /></el-icon>
-              Logout
+              <el-icon><SwitchButton /></el-icon>Logout
             </el-dropdown-item>
           </el-dropdown-menu>
         </template>
@@ -33,27 +24,38 @@
 </template>
 
 <script setup lang="ts">
-import { useRouter } from 'vue-router'
+import { computed } from 'vue'
+import { useRouter, useRoute } from 'vue-router'
 import { useUserStore } from '@/stores/user'
 import { ElMessage } from 'element-plus'
-import { User, ArrowDown, Setting, SwitchButton } from '@element-plus/icons-vue'
+import { ArrowDown, Setting, SwitchButton } from '@element-plus/icons-vue'
 
 const router = useRouter()
+const route = useRoute()
 const userStore = useUserStore()
 
+const pageTitles: Record<string, string> = {
+  '/': 'Dashboard',
+  '/sources': 'Sources',
+  '/config': 'Configuration',
+  '/proxies': 'Proxies',
+  '/mihomo': 'Mihomo',
+  '/logs': 'Logs',
+  '/settings': 'Settings',
+}
+
+const pageTitle = computed(() => pageTitles[route.path] ?? 'Proxyd')
+
+const userInitial = computed(() =>
+  (userStore.username?.[0] ?? 'U').toUpperCase()
+)
+
 const handleCommand = async (command: string) => {
-  switch (command) {
-    case 'profile':
-      ElMessage.info('Profile feature coming soon')
-      break
-    case 'settings':
-      router.push('/settings')
-      break
-    case 'logout':
-      await userStore.logout()
-      router.push('/login')
-      ElMessage.success('Logged out successfully')
-      break
+  if (command === 'settings') router.push('/settings')
+  if (command === 'logout') {
+    await userStore.logout()
+    router.push('/login')
+    ElMessage.success('Logged out')
   }
 }
 </script>
@@ -63,47 +65,53 @@ const handleCommand = async (command: string) => {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 0 20px;
-  height: 60px;
-  background: #fff;
-  border-bottom: 1px solid #e4e7ed;
+  padding: 0 24px;
+  height: 52px;
+  background: var(--cv-sidebar);
+  border-bottom: 1px solid var(--cv-border);
+  flex-shrink: 0;
 }
 
-.header-left {
-  display: flex;
-  align-items: baseline;
-  gap: 10px;
-}
-
-.title {
-  margin: 0;
-  font-size: 20px;
+.header-title {
+  font-size: 15px;
   font-weight: 600;
-  color: #409eff;
-}
-
-.subtitle {
-  font-size: 14px;
-  color: #909399;
+  color: var(--cv-text);
 }
 
 .header-right {
   display: flex;
   align-items: center;
-  gap: 15px;
 }
 
-.user-dropdown {
+.user-btn {
   display: flex;
   align-items: center;
-  gap: 5px;
+  gap: 8px;
+  padding: 5px 10px;
+  border-radius: var(--cv-radius-sm);
   cursor: pointer;
-  padding: 8px 12px;
-  border-radius: 4px;
-  transition: background-color 0.3s;
+  transition: background 0.15s;
 }
 
-.user-dropdown:hover {
-  background-color: #f5f7fa;
+.user-btn:hover {
+  background: rgba(255,255,255,0.06);
+}
+
+.user-avatar {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: var(--cv-accent);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.user-name {
+  font-size: 13px;
+  color: var(--cv-text);
 }
 </style>
