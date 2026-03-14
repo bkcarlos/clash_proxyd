@@ -7,17 +7,34 @@
         placeholder="Paste subscription URL here..."
         clearable
         style="flex:1"
+        :disabled="busy"
         @keyup.enter="addProfile"
       >
         <template #prefix><el-icon><Link /></el-icon></template>
       </el-input>
-      <el-input v-model="newName" placeholder="Name (optional)" style="width:180px" />
-      <el-button type="primary" :loading="adding" @click="addProfile">
+      <el-input v-model="newName" placeholder="Name (optional)" style="width:180px" :disabled="busy" />
+      <el-button type="primary" :loading="busy" @click="addProfile">
         <el-icon><Plus /></el-icon>Add
       </el-button>
-      <el-button :loading="applying" @click="applyAll">
+      <el-button :loading="applying" :disabled="busy || sources.length === 0" @click="applyAll">
         <el-icon><Promotion /></el-icon>Apply All
       </el-button>
+    </div>
+
+    <!-- Step progress (shown while adding) -->
+    <div v-if="busy" class="step-bar">
+      <div
+        v-for="step in steps"
+        :key="step.key"
+        class="step-item"
+        :class="step.status"
+      >
+        <el-icon v-if="step.status === 'done'"><CircleCheck /></el-icon>
+        <el-icon v-else-if="step.status === 'error'"><CircleClose /></el-icon>
+        <span v-else-if="step.status === 'active'" class="step-spinner" />
+        <span v-else class="step-dot" />
+        <span>{{ step.label }}</span>
+      </div>
     </div>
 
     <!-- Profile list -->
@@ -47,13 +64,13 @@
               size="small"
               @change="toggleEnabled(src)"
             />
-            <el-tooltip content="Fetch & update cache">
-              <el-button link :loading="fetchingId === src.id" @click="fetchProfile(src)">
+            <el-tooltip content="Fetch & apply">
+              <el-button link :loading="fetchingId === src.id" :disabled="busy" @click="fetchAndApply(src)">
                 <el-icon><Refresh /></el-icon>
               </el-button>
             </el-tooltip>
             <el-tooltip content="Delete">
-              <el-button link type="danger" @click="deleteProfile(src.id)">
+              <el-button link type="danger" :disabled="busy" @click="deleteProfile(src.id)">
                 <el-icon><Delete /></el-icon>
               </el-button>
             </el-tooltip>
@@ -109,14 +126,17 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Plus, Refresh, Delete, Link, Promotion } from '@element-plus/icons-vue'
+import { Plus, Refresh, Delete, Link, Promotion, CircleCheck, CircleClose } from '@element-plus/icons-vue'
 import * as sourceApi from '@/api/source'
 import { quickApply, listRevisions, rollbackRevision } from '@/api/config'
+import { useProxyStore } from '@/stores/proxy'
 import type { Source } from '@/api/source'
+
+const proxyStore = useProxyStore()
 
 const sources = ref<any[]>([])
 const loading = ref(false)
-const adding = ref(false)
+const busy = ref(false)       // locked while add pipeline runs
 const applying = ref(false)
 const fetchingId = ref<number | null>(null)
 const newUrl = ref('')
@@ -125,6 +145,34 @@ const revisions = ref<any[]>([])
 const revDialogVisible = ref(false)
 const revContent = ref('')
 
+// ── Step pipeline UI ────────────────────────────────────────────────────────
+type StepStatus = 'pending' | 'active' | 'done' | 'error'
+interface Step { key: string; label: string; status: StepStatus }
+
+const steps = ref<Step[]>([])
+
+function initSteps(labels: string[]) {
+  steps.value = labels.map((label, i) => ({
+    key: String(i),
+    label,
+    status: i === 0 ? 'active' : 'pending',
+  }))
+}
+
+function advanceStep(errorMsg?: string) {
+  const idx = steps.value.findIndex(s => s.status === 'active')
+  if (idx < 0) return
+  if (errorMsg) {
+    steps.value[idx].status = 'error'
+    return
+  }
+  steps.value[idx].status = 'done'
+  if (idx + 1 < steps.value.length) {
+    steps.value[idx + 1].status = 'active'
+  }
+}
+
+// ── Helpers ─────────────────────────────────────────────────────────────────
 const formatSize = (bytes: number) => {
   if (!bytes) return ''
   if (bytes < 1024) return `${bytes}B`
@@ -142,27 +190,36 @@ const formatRelative = (iso: string) => {
   return `${Math.floor(h / 24)}d ago`
 }
 
+// ── Data loaders ─────────────────────────────────────────────────────────────
 const loadSources = async () => {
   loading.value = true
-  try {
-    sources.value = await sourceApi.listSources()
-  } finally {
-    loading.value = false
-  }
+  try { sources.value = await sourceApi.listSources() }
+  finally { loading.value = false }
 }
 
 const loadRevisions = async () => {
-  try {
-    revisions.value = await listRevisions(10)
-  } catch { /* non-critical */ }
+  try { revisions.value = await listRevisions(10) } catch { /* non-critical */ }
 }
 
+// ── Core pipeline: fetch + apply + refresh proxies ───────────────────────────
+const runApplyPipeline = async () => {
+  const res = await quickApply()
+  await loadRevisions()
+  await proxyStore.fetchProxies(true)
+  return res
+}
+
+// ── Add profile ───────────────────────────────────────────────────────────────
 const addProfile = async () => {
   const url = newUrl.value.trim()
   if (!url) { ElMessage.warning('Please enter a URL'); return }
-  adding.value = true
+
+  busy.value = true
+  initSteps(['Creating source', 'Fetching subscription', 'Applying config'])
+
   try {
-    await sourceApi.createSource({
+    // Step 1: create
+    const src = await sourceApi.createSource({
       name: newName.value.trim() || new URL(url).hostname,
       type: 'http',
       url,
@@ -170,30 +227,58 @@ const addProfile = async () => {
       enabled: true,
       priority: 0,
     } as any)
+    advanceStep()
+
+    // Step 2: fetch
+    await sourceApi.fetchSource(src.id)
+    await loadSources()
+    advanceStep()
+
+    // Step 3: apply
+    await runApplyPipeline()
+    advanceStep()
+
     newUrl.value = ''
     newName.value = ''
-    await loadSources()
-    await applyAll(true)
+    ElMessage.success('Profile added and applied')
   } catch (e: any) {
+    advanceStep(e.message || 'Failed')
     ElMessage.error(e.message || 'Failed to add profile')
   } finally {
-    adding.value = false
+    busy.value = false
+    steps.value = []
   }
 }
 
-const fetchProfile = async (src: Source) => {
+// ── Fetch & auto-apply ────────────────────────────────────────────────────────
+const fetchAndApply = async (src: Source) => {
   fetchingId.value = src.id
   try {
     await sourceApi.fetchSource(src.id)
-    ElMessage.success(`${src.name} updated`)
     await loadSources()
+    await runApplyPipeline()
+    ElMessage.success(`${src.name} updated and applied`)
   } catch (e: any) {
-    ElMessage.error(e.message || 'Fetch failed')
+    ElMessage.error(e.message || 'Failed')
   } finally {
     fetchingId.value = null
   }
 }
 
+// ── Apply All ─────────────────────────────────────────────────────────────────
+const applyAll = async () => {
+  applying.value = true
+  try {
+    const res = await runApplyPipeline()
+    ElMessage.success(`Applied — ${res.data?.sources?.length ?? 0} profile(s)`)
+  } catch (e: any) {
+    ElMessage.error(e.message || 'Apply failed')
+  } finally {
+    applying.value = false
+  }
+}
+
+// ── Other actions ─────────────────────────────────────────────────────────────
 const toggleEnabled = async (src: any) => {
   try {
     await sourceApi.updateSource(src.id, src)
@@ -212,19 +297,6 @@ const deleteProfile = async (id: number) => {
   } catch { /* cancel */ }
 }
 
-const applyAll = async (silent = false) => {
-  applying.value = true
-  try {
-    const res = await quickApply()
-    ElMessage.success(`Applied — ${res.data?.sources?.length ?? 0} profile(s)`)
-    await loadRevisions()
-  } catch (e: any) {
-    if (!silent) ElMessage.error(e.message || 'Apply failed')
-  } finally {
-    applying.value = false
-  }
-}
-
 const viewRevision = (rev: any) => {
   revContent.value = rev.content
   revDialogVisible.value = true
@@ -234,6 +306,7 @@ const rollback = async (rev: any) => {
   try {
     await ElMessageBox.confirm(`Apply revision ${rev.version}?`, 'Confirm', { type: 'warning' })
     await rollbackRevision(rev.id)
+    await proxyStore.fetchProxies(true)
     ElMessage.success('Applied')
     await loadRevisions()
   } catch { /* cancel */ }
@@ -257,6 +330,62 @@ onMounted(() => {
   border-radius: var(--cv-radius);
   padding: 14px 16px;
 }
+
+/* Step progress bar */
+.step-bar {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  background: var(--cv-surface);
+  border: 1px solid var(--cv-border);
+  border-radius: var(--cv-radius);
+  padding: 12px 20px;
+  overflow: hidden;
+}
+
+.step-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: var(--cv-text-muted);
+  flex: 1;
+  position: relative;
+}
+
+.step-item:not(:last-child)::after {
+  content: '';
+  position: absolute;
+  right: 0;
+  top: 50%;
+  width: 24px;
+  height: 1px;
+  background: var(--cv-border);
+  transform: translateY(-50%);
+}
+
+.step-item.active  { color: #5865f2; font-weight: 600; }
+.step-item.done    { color: #67c23a; }
+.step-item.error   { color: #f56c6c; }
+.step-item.pending { opacity: 0.45; }
+
+.step-dot {
+  width: 8px; height: 8px;
+  border-radius: 50%;
+  background: currentColor;
+  flex-shrink: 0;
+}
+
+.step-spinner {
+  width: 14px; height: 14px;
+  border: 2px solid #5865f2;
+  border-top-color: transparent;
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+  flex-shrink: 0;
+}
+
+@keyframes spin { to { transform: rotate(360deg); } }
 
 .profile-list { display: flex; flex-direction: column; gap: 10px; }
 
