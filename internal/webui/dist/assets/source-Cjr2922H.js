@@ -1,0 +1,1 @@
+import{r}from"./index-BUlNPbHD.js";const o=()=>r({url:"/sources",method:"GET"}),u=e=>r({url:"/sources",method:"POST",data:e}),c=(e,t)=>r({url:`/sources/${e}`,method:"PUT",data:t}),n=e=>r({url:`/sources/${e}`,method:"DELETE"}),a=e=>r({url:`/sources/${e}/test`,method:"POST"}),d=e=>r({url:`/sources/${e}/fetch`,method:"POST"});export{u as c,n as d,d as f,o as l,a as t,c as u};
