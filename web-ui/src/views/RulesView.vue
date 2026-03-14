@@ -11,19 +11,27 @@
       >
         <template #prefix><el-icon><Search /></el-icon></template>
       </el-input>
+      <el-select v-model="typeFilter" placeholder="All types" clearable style="width:160px" size="small">
+        <el-option v-for="t in ruleTypes" :key="t" :label="t" :value="t" />
+      </el-select>
       <el-button size="small" :loading="loading" @click="loadRules">
         <el-icon><Refresh /></el-icon>Refresh
+      </el-button>
+      <el-button size="small" :disabled="rules.length === 0" @click="downloadRules">
+        <el-icon><Download /></el-icon>Export
       </el-button>
     </div>
 
     <el-table
       v-loading="loading"
-      :data="filteredRules"
+      :data="pagedRules"
       size="small"
       :max-height="tableHeight"
       stripe
     >
-      <el-table-column type="index" width="55" label="#" />
+      <el-table-column type="index" width="60" label="#"
+        :index="(i: number) => (page - 1) * pageSize + i + 1"
+      />
       <el-table-column label="Type" width="160">
         <template #default="{ row }">
           <el-tag size="small" :type="ruleTagType(row.type)">{{ row.type }}</el-tag>
@@ -32,12 +40,27 @@
       <el-table-column prop="payload" label="Payload" min-width="200" show-overflow-tooltip />
       <el-table-column label="Proxy" width="160">
         <template #default="{ row }">
-          <el-tag size="small" :type="row.proxy === 'DIRECT' ? 'success' : row.proxy === 'REJECT' ? 'danger' : 'primary'">
+          <el-tag
+            size="small"
+            :type="row.proxy === 'DIRECT' ? 'success' : row.proxy === 'REJECT' ? 'danger' : 'primary'"
+          >
             {{ row.proxy }}
           </el-tag>
         </template>
       </el-table-column>
     </el-table>
+
+    <div class="pagination-bar">
+      <el-pagination
+        v-model:current-page="page"
+        v-model:page-size="pageSize"
+        :total="filteredRules.length"
+        :page-sizes="[50, 100, 200, 500]"
+        layout="total, sizes, prev, pager, next, jumper"
+        background
+        small
+      />
+    </div>
 
     <div v-if="!loading && rules.length === 0" style="text-align:center;padding:40px">
       <el-empty description="No rules — mihomo may not be running or no config applied" />
@@ -46,33 +69,64 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
-import { Search, Refresh } from '@element-plus/icons-vue'
+import { ref, computed, onMounted, watch } from 'vue'
+import { Search, Refresh, Download } from '@element-plus/icons-vue'
 import request from '@/api/request'
 
 const rules = ref<any[]>([])
 const filter = ref('')
+const typeFilter = ref('')
 const loading = ref(false)
-const tableHeight = window.innerHeight - 160
+const page = ref(1)
+const pageSize = ref(100)
+const tableHeight = window.innerHeight - 200
 
-const filteredRules = computed(() => {
-  if (!filter.value) return rules.value
-  const q = filter.value.toLowerCase()
-  return rules.value.filter(r =>
-    (r.type || '').toLowerCase().includes(q) ||
-    (r.payload || '').toLowerCase().includes(q) ||
-    (r.proxy || '').toLowerCase().includes(q)
-  )
+// Reset page on filter change
+watch([filter, typeFilter], () => { page.value = 1 })
+
+const ruleTypes = computed(() => {
+  const s = new Set(rules.value.map(r => r.type).filter(Boolean))
+  return [...s].sort()
 })
 
-const ruleTagType = (type: string) => {
-  const map: Record<string, string> = {
-    DOMAIN: 'primary', 'DOMAIN-SUFFIX': 'primary', 'DOMAIN-KEYWORD': 'primary',
-    'IP-CIDR': 'warning', 'IP-CIDR6': 'warning',
-    GEOIP: 'success', GEOSITE: 'success',
-    MATCH: '', RULE_SET: 'info',
+const filteredRules = computed(() => {
+  let list = rules.value
+  if (typeFilter.value) {
+    list = list.filter(r => r.type === typeFilter.value)
   }
-  return (map[type] || '') as any
+  if (filter.value.trim()) {
+    const q = filter.value.toLowerCase()
+    list = list.filter(r =>
+      (r.type || '').toLowerCase().includes(q) ||
+      (r.payload || '').toLowerCase().includes(q) ||
+      (r.proxy || '').toLowerCase().includes(q)
+    )
+  }
+  return list
+})
+
+const pagedRules = computed(() => {
+  const start = (page.value - 1) * pageSize.value
+  return filteredRules.value.slice(start, start + pageSize.value)
+})
+
+const ruleTagType = (type: string): 'primary' | 'success' | 'warning' | 'danger' | 'info' => {
+  const map: Record<string, 'primary' | 'success' | 'warning' | 'danger' | 'info'> = {
+    DOMAIN: 'primary',
+    'DOMAIN-SUFFIX': 'primary',
+    'DOMAIN-KEYWORD': 'primary',
+    'DOMAIN-REGEX': 'primary',
+    'IP-CIDR': 'warning',
+    'IP-CIDR6': 'warning',
+    'SRC-IP-CIDR': 'warning',
+    GEOIP: 'success',
+    GEOSITE: 'success',
+    'RULE-SET': 'info',
+    MATCH: 'info',
+    PROCESS: 'danger',
+    'PROCESS-NAME': 'danger',
+  }
+  return map[type] ?? 'info'
 }
 
 const loadRules = async () => {
@@ -87,6 +141,19 @@ const loadRules = async () => {
   }
 }
 
+const downloadRules = () => {
+  const lines = filteredRules.value.map(r =>
+    [r.type, r.payload, r.proxy].filter(Boolean).join(',')
+  )
+  const content = lines.join('\n')
+  const blob = new Blob([content], { type: 'text/plain' })
+  const a = document.createElement('a')
+  a.href = URL.createObjectURL(blob)
+  a.download = `mihomo-rules-${Date.now()}.txt`
+  a.click()
+  URL.revokeObjectURL(a.href)
+}
+
 onMounted(loadRules)
 </script>
 
@@ -96,7 +163,7 @@ onMounted(loadRules)
 .toolbar {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
   background: var(--cv-surface);
   border: 1px solid var(--cv-border);
   border-radius: var(--cv-radius);
@@ -104,4 +171,10 @@ onMounted(loadRules)
 }
 
 .count { font-size: 13px; color: var(--cv-text-muted); flex: 1; }
+
+.pagination-bar {
+  display: flex;
+  justify-content: flex-end;
+  padding: 4px 0;
+}
 </style>
