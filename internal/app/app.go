@@ -371,29 +371,31 @@ func (a *App) autoStartMihomo() {
 	}
 }
 
-// killStaleMihomo terminates any mihomo process whose PID is recorded in the
-// runtime table. This handles the case where proxyd was killed hard (SIGKILL
-// before Pdeathsig was set) and left an orphan mihomo behind.
+// killStaleMihomo terminates all mihomo processes recorded as 'running' in the
+// runtime table. Handles orphans left when proxyd was killed before Pdeathsig.
 func (a *App) killStaleMihomo() {
 	if a.runtimeStore == nil {
 		return
 	}
-	rt, err := a.runtimeStore.Get()
-	if err != nil || rt == nil || rt.PID <= 0 {
+	running, err := a.runtimeStore.GetAllRunning()
+	if err != nil || len(running) == 0 {
 		return
 	}
-	proc, err := os.FindProcess(rt.PID)
-	if err != nil {
-		return
+	for _, rt := range running {
+		proc, err := os.FindProcess(rt.PID)
+		if err != nil {
+			continue
+		}
+		if err := proc.Signal(syscall.Signal(0)); err != nil {
+			continue // already dead
+		}
+		logx.Info("Killing stale mihomo process", zap.Int("pid", rt.PID))
+		_ = proc.Signal(syscall.SIGTERM)
+		time.Sleep(500 * time.Millisecond)
+		_ = proc.Kill()
 	}
-	// Signal 0 checks liveness without side effects.
-	if err := proc.Signal(syscall.Signal(0)); err != nil {
-		return // process already dead
-	}
-	logx.Info("Killing stale mihomo process", zap.Int("pid", rt.PID))
-	_ = proc.Signal(syscall.SIGTERM)
-	time.Sleep(500 * time.Millisecond)
-	_ = proc.Kill() // force-kill if still alive
+	// Remove all historical rows; the fresh row will be created by upsertRuntime.
+	_ = a.runtimeStore.PurgeStaleRows()
 }
 
 func (a *App) checkAndApplyMihomoUpdate() {

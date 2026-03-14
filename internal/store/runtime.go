@@ -120,6 +120,38 @@ func (r *RuntimeStore) UpdatePID(id int, pid int) error {
 	return nil
 }
 
+// GetAllRunning returns all rows with status='running' and a valid PID.
+// Used by the startup cleanup to kill stale mihomo processes.
+func (r *RuntimeStore) GetAllRunning() ([]*types.Runtime, error) {
+	query := `
+		SELECT id, pid, port, config_path, status, uptime, memory_usage, last_check, updated_at
+		FROM runtime WHERE status = 'running' AND pid > 0
+	`
+	rows, err := r.db.Query(query)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query running runtimes: %w", err)
+	}
+	defer rows.Close()
+
+	var results []*types.Runtime
+	for rows.Next() {
+		rt := &types.Runtime{}
+		if err := rows.Scan(&rt.ID, &rt.PID, &rt.Port, &rt.ConfigPath,
+			&rt.Status, &rt.Uptime, &rt.MemoryUsage, &rt.LastCheck, &rt.UpdatedAt); err != nil {
+			continue
+		}
+		results = append(results, rt)
+	}
+	return results, nil
+}
+
+// PurgeStaleRows deletes all rows except the one with the highest id.
+// Keeps the runtime table from growing unboundedly across restarts.
+func (r *RuntimeStore) PurgeStaleRows() error {
+	_, err := r.db.Exec(`DELETE FROM runtime WHERE id < (SELECT MAX(id) FROM runtime)`)
+	return err
+}
+
 // UpdateStats updates uptime and memory usage
 func (r *RuntimeStore) UpdateStats(id int, uptime, memoryUsage int) error {
 	query := `
