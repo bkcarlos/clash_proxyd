@@ -2,10 +2,16 @@
   <div class="sources-view">
     <div class="page-header">
       <h1>Sources</h1>
-      <el-button type="primary" @click="showCreateDialog">
-        <el-icon><Plus /></el-icon>
-        Add Source
-      </el-button>
+      <div style="display:flex;gap:8px">
+        <el-button :loading="applying" @click="applyToMihomo">
+          <el-icon><Promotion /></el-icon>
+          Apply to Mihomo
+        </el-button>
+        <el-button type="primary" @click="showCreateDialog">
+          <el-icon><Plus /></el-icon>
+          Add Source
+        </el-button>
+      </div>
     </div>
 
     <el-table
@@ -106,7 +112,8 @@
 import { reactive, ref, onMounted } from 'vue'
 import { useSourceStore } from '@/stores/source'
 import { ElMessageBox, ElMessage } from 'element-plus'
-import { Plus } from '@element-plus/icons-vue'
+import { Plus, Promotion } from '@element-plus/icons-vue'
+import { quickApply } from '@/api/config'
 import type { Source } from '@/api/source'
 import type { FormInstance, FormRules } from 'element-plus'
 
@@ -114,6 +121,7 @@ const sourceStore = useSourceStore()
 
 const dialogVisible = ref(false)
 const isEdit = ref(false)
+const applying = ref(false)
 const formRef = ref<FormInstance>()
 
 const form = reactive<Partial<Source>>({
@@ -209,21 +217,39 @@ const handleSubmit = async () => {
       if (isEdit.value) {
         await sourceStore.updateSource(form.id!, form as Source)
         ElMessage.success('Source updated successfully')
+        dialogVisible.value = false
+        await sourceStore.fetchSources()
       } else {
         const res: any = await sourceStore.createSource(form as Source)
+        dialogVisible.value = false
+        await sourceStore.fetchSources()
         if (res?.warning) {
-          ElMessage.warning('Source saved, but initial fetch failed: ' + res.warning)
+          ElMessage.warning('Source saved, but fetch failed: ' + res.warning)
         } else {
-          ElMessage.success('Source created and content cached successfully')
+          // Auto apply after successful create + cache
+          await doQuickApply(true)
         }
       }
-      dialogVisible.value = false
-      await sourceStore.fetchSources()
     } catch (error: any) {
       ElMessage.error(error.message || 'Operation failed')
     }
   })
 }
+
+const doQuickApply = async (silent = false) => {
+  applying.value = true
+  try {
+    const res = await quickApply()
+    ElMessage.success(`Config applied — ${res.data?.sources?.length ?? 0} source(s) merged`)
+  } catch (error: any) {
+    if (!silent) ElMessage.error(error.message || 'Apply failed')
+    else ElMessage.warning('Source saved. Apply manually when ready.')
+  } finally {
+    applying.value = false
+  }
+}
+
+const applyToMihomo = () => doQuickApply()
 
 const testSource = async (id: number) => {
   try {

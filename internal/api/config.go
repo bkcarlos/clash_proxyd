@@ -123,6 +123,79 @@ func (h *Handler) saveAndApplyConfig(c *gin.Context, yamlStr string, targetPath 
 	return nil
 }
 
+// QuickApply generates config from all enabled sources (using cache) and applies it.
+// This is a convenience endpoint: one call replaces Generate → Apply.
+func (h *Handler) QuickApply(c *gin.Context) {
+	sources, err := h.sourceStore.GetEnabled()
+	if err != nil {
+		h.respondError(c, http.StatusInternalServerError, "Failed to list sources: "+err.Error())
+		return
+	}
+	if len(sources) == 0 {
+		h.respondError(c, http.StatusBadRequest, "No enabled sources found")
+		return
+	}
+
+	ids := make([]int, len(sources))
+	for i, s := range sources {
+		ids[i] = s.ID
+	}
+
+	srcs, configs, err := h.loadSourceConfigs(ids)
+	if err != nil {
+		h.respondError(c, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	rendered, err := h.renderer.Render(configs)
+	if err != nil {
+		h.respondError(c, http.StatusInternalServerError, "Failed to render config")
+		return
+	}
+
+	yamlParser := parser.NewParser()
+	yamlStr, err := yamlParser.ToYAMLString(rendered)
+	if err != nil {
+		h.respondError(c, http.StatusInternalServerError, "Failed to generate YAML")
+		return
+	}
+
+	hash := source.Hash([]byte(yamlStr))
+	revision := &types.Revision{
+		Version:    h.nextRevisionVersion(),
+		Content:    yamlStr,
+		SourceHash: hash,
+		CreatedBy:  h.getUser(c),
+	}
+	if err := h.revisionStore.Create(revision); err != nil {
+		h.respondError(c, http.StatusInternalServerError, "Failed to save revision")
+		return
+	}
+
+	path := h.defaultRuntimeConfigPath()
+	if rt, getErr := h.runtimeStore.Get(); getErr == nil && rt.ConfigPath != "" {
+		path = rt.ConfigPath
+	}
+
+	if err := h.saveAndApplyConfig(c, yamlStr, path, "quick_apply"); err != nil {
+		h.respondError(c, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	names := make([]string, len(srcs))
+	for i, s := range srcs {
+		names[i] = s.Name
+	}
+
+	h.auditLog(c, "quick_apply", "config", fmt.Sprintf("Quick apply from sources: %v", names))
+	h.respondSuccess(c, "Config generated and applied successfully", gin.H{
+		"sources":  names,
+		"hash":     hash,
+		"path":     path,
+		"revision": revision.Version,
+	})
+}
+
 // GenerateConfig generates mihomo configuration from sources
 func (h *Handler) GenerateConfig(c *gin.Context) {
 	var req GenerateConfigRequest

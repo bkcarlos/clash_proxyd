@@ -1,5 +1,12 @@
 import request from './request'
 
+export const quickApply = (): Promise<{ message: string; data: { sources: string[]; hash: string; path: string; revision: string } }> => {
+  return request({
+    url: '/config/quick-apply',
+    method: 'POST'
+  })
+}
+
 export const generateConfig = (sourceIds: number[]): Promise<any> => {
   return request({
     url: '/config/generate',

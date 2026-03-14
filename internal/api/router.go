@@ -70,6 +70,7 @@ func (h *Handler) SetupRouter(authManager *auth.Manager, corsOrigins []string) *
 			config := protected.Group("/config")
 			{
 				config.POST("/generate", h.GenerateConfig)
+			config.POST("/quick-apply", h.QuickApply)
 				config.GET("", h.GetConfig)
 				config.POST("/save", h.SaveConfig)
 				config.POST("/apply", h.ApplyConfig)
