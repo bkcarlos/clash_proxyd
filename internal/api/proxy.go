@@ -155,6 +155,35 @@ func (h *Handler) GetProxyGroups(c *gin.Context) {
 	h.respondJSON(c, http.StatusOK, gin.H{"groups": result})
 }
 
+// GetConnections returns all active connections from mihomo
+func (h *Handler) GetConnections(c *gin.Context) {
+	conns, err := h.mihomoManager.GetConnections()
+	if err != nil {
+		h.mihomoUnavailable(c, err)
+		return
+	}
+	h.respondJSON(c, http.StatusOK, conns)
+}
+
+// CloseConnection closes a specific connection by ID
+func (h *Handler) CloseConnection(c *gin.Context) {
+	id := c.Param("id")
+	if err := h.mihomoManager.CloseConnection(id); err != nil {
+		h.mihomoUnavailable(c, err)
+		return
+	}
+	h.respondSuccess(c, "Connection closed", nil)
+}
+
+// CloseAllConnections closes all active connections
+func (h *Handler) CloseAllConnections(c *gin.Context) {
+	if err := h.mihomoManager.CloseAllConnections(); err != nil {
+		h.mihomoUnavailable(c, err)
+		return
+	}
+	h.respondSuccess(c, "All connections closed", nil)
+}
+
 // GetRules returns active rules
 func (h *Handler) GetRules(c *gin.Context) {
 	rules, err := h.mihomoManager.GetRules()

@@ -1,70 +1,74 @@
 <template>
   <div class="logs-view">
-    <div class="page-header">
-      <h1>Logs</h1>
-      <div class="header-actions">
-        <el-select v-model="lineCount" style="width: 110px" @change="fetchLogs">
-          <el-option label="100 lines" :value="100" />
-          <el-option label="200 lines" :value="200" />
-          <el-option label="500 lines" :value="500" />
-          <el-option label="1000 lines" :value="1000" />
-        </el-select>
+    <div class="toolbar">
+      <el-tabs v-model="mode" class="mode-tabs" @tab-change="onModeChange">
+        <el-tab-pane label="Live (WebSocket)" name="live" />
+        <el-tab-pane label="proxyd log" name="proxyd" />
+        <el-tab-pane label="mihomo log" name="mihomo" />
+      </el-tabs>
+
+      <div class="toolbar-right">
+        <!-- Live mode controls -->
+        <template v-if="mode === 'live'">
+          <el-select v-model="logLevel" style="width:110px" size="small" @change="reconnectWS">
+            <el-option label="debug" value="debug" />
+            <el-option label="info"  value="info" />
+            <el-option label="warn"  value="warning" />
+            <el-option label="error" value="error" />
+          </el-select>
+          <el-tag :type="wsConnected ? 'success' : 'danger'" size="small">
+            {{ wsConnected ? 'Connected' : 'Disconnected' }}
+          </el-tag>
+          <el-button size="small" @click="liveLines = []">Clear</el-button>
+        </template>
+
+        <!-- File mode controls -->
+        <template v-else>
+          <el-select v-model="lineCount" style="width:110px" size="small" @change="fetchLogs">
+            <el-option label="100 lines" :value="100" />
+            <el-option label="200 lines" :value="200" />
+            <el-option label="500 lines" :value="500" />
+            <el-option label="1000 lines" :value="1000" />
+          </el-select>
+          <el-button
+            :type="autoRefresh ? 'primary' : 'default'"
+            size="small"
+            @click="toggleAutoRefresh"
+          >
+            {{ autoRefresh ? 'Live' : 'Live' }}
+          </el-button>
+          <el-button size="small" :loading="loading" @click="fetchLogs">
+            <el-icon><Refresh /></el-icon>
+          </el-button>
+          <el-button
+            size="small"
+            :disabled="!currentInfo.available"
+            @click="download"
+          >
+            <el-icon><Download /></el-icon>
+          </el-button>
+        </template>
+
         <el-input
           v-model="filterText"
           placeholder="Filter..."
           clearable
-          style="width: 200px"
+          size="small"
+          style="width:180px"
         >
           <template #prefix><el-icon><Search /></el-icon></template>
         </el-input>
-        <el-tooltip :content="autoRefresh ? 'Auto-refresh on (5s)' : 'Auto-refresh off'">
-          <el-button
-            :type="autoRefresh ? 'primary' : 'default'"
-            @click="toggleAutoRefresh"
-          >
-            <el-icon><Timer /></el-icon>
-            {{ autoRefresh ? 'Live' : 'Live' }}
-          </el-button>
-        </el-tooltip>
-        <el-button :loading="loading" @click="fetchLogs">
-          <el-icon><Refresh /></el-icon>
-          Refresh
-        </el-button>
-        <el-button
-          :disabled="!currentInfo.available"
-          @click="download"
-        >
-          <el-icon><Download /></el-icon>
-          Download
-        </el-button>
       </div>
     </div>
 
-    <el-tabs v-model="activeTab" @tab-change="onTabChange">
-      <el-tab-pane label="proxyd" name="proxyd">
-        <template #label>
-          <span>proxyd</span>
-          <el-badge v-if="proxydInfo.available === false" value="!" type="warning" style="margin-left:4px" />
-        </template>
-      </el-tab-pane>
-      <el-tab-pane label="Mihomo" name="mihomo">
-        <template #label>
-          <span>Mihomo</span>
-          <el-badge v-if="mihomoInfo.available === false" value="!" type="warning" style="margin-left:4px" />
-        </template>
-      </el-tab-pane>
-    </el-tabs>
-
-    <!-- File info bar -->
-    <div class="file-info" v-if="currentInfo.file">
+    <!-- File info bar (file mode) -->
+    <div class="file-info" v-if="mode !== 'live' && currentInfo.file">
       <el-icon><Document /></el-icon>
       <span class="file-path">{{ currentInfo.file }}</span>
       <span class="file-meta" v-if="currentInfo.available">
-        {{ currentInfo.total }} lines shown · {{ formatBytes(currentInfo.file_size) }}
+        {{ currentInfo.total }} lines · {{ formatBytes(currentInfo.file_size) }}
       </span>
-      <el-tag v-if="currentInfo.available === false" type="warning" size="small">
-        {{ currentInfo.message || 'Not available' }}
-      </el-tag>
+      <el-tag v-else type="warning" size="small">{{ currentInfo.message || 'Not available' }}</el-tag>
     </div>
 
     <!-- Log output -->
@@ -74,27 +78,15 @@
           v-for="(line, i) in filteredLines"
           :key="i"
           :class="['log-line', levelClass(line)]"
-        >
-          <span class="log-text">{{ line }}</span>
-        </div>
+        >{{ line }}</div>
       </template>
       <div v-else-if="!loading" class="log-empty">
-        <el-empty
-          :description="currentInfo.available === false
-            ? (currentInfo.message || 'Log file not available')
-            : (filterText ? 'No matching lines' : 'No log entries')"
-        />
+        <el-empty :description="mode === 'live' ? (wsConnected ? 'Waiting for logs...' : 'Not connected') : 'No log entries'" />
       </div>
     </div>
 
-    <!-- Scroll to bottom -->
     <el-tooltip content="Scroll to bottom" placement="left">
-      <el-button
-        class="scroll-btn"
-        circle
-        type="primary"
-        @click="scrollToBottom"
-      >
+      <el-button class="scroll-btn" circle type="primary" @click="scrollToBottom">
         <el-icon><ArrowDown /></el-icon>
       </el-button>
     </el-tooltip>
@@ -102,60 +94,75 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted, nextTick, watch } from 'vue'
+import { ref, computed, onMounted, onUnmounted, nextTick } from 'vue'
 import { ElMessage } from 'element-plus'
-import { Refresh, Search, Timer, Document, ArrowDown, Download } from '@element-plus/icons-vue'
+import { Refresh, Search, Document, ArrowDown, Download } from '@element-plus/icons-vue'
 import { getLogs, downloadLog, type LogResponse } from '@/api/system'
 
-const activeTab = ref<'proxyd' | 'mihomo'>('proxyd')
-const lineCount = ref(200)
+type Mode = 'live' | 'proxyd' | 'mihomo'
+
+const mode = ref<Mode>('live')
 const filterText = ref('')
-const loading = ref(false)
-const autoRefresh = ref(false)
 const logContainer = ref<HTMLElement | null>(null)
 
+// ── Live WebSocket mode ────────────────────────────────────────────────────
+const liveLines = ref<string[]>([])
+const wsConnected = ref(false)
+const logLevel = ref('info')
+const MAX_LIVE = 2000
+let ws: WebSocket | null = null
+
+const connectWS = () => {
+  if (ws) ws.close()
+  const token = localStorage.getItem('token') || ''
+  const protocol = location.protocol === 'https:' ? 'wss' : 'ws'
+  const url = `${protocol}://${location.host}/api/v1/proxy/mihomo/log-stream?level=${logLevel.value}&token=${token}`
+  ws = new WebSocket(url)
+  ws.onopen = () => { wsConnected.value = true }
+  ws.onclose = () => { wsConnected.value = false }
+  ws.onerror = () => { wsConnected.value = false }
+  ws.onmessage = (e) => {
+    try {
+      const d = JSON.parse(e.data)
+      if (d.type === 'error') { ElMessage.warning(d.payload); return }
+      const line = `${d.time || ''} [${(d.type || '').toUpperCase()}] ${d.payload || ''}`
+      liveLines.value.push(line)
+      if (liveLines.value.length > MAX_LIVE) liveLines.value.shift()
+      autoScroll()
+    } catch {
+      liveLines.value.push(e.data)
+      autoScroll()
+    }
+  }
+}
+
+const disconnectWS = () => { ws?.close(); ws = null; wsConnected.value = false }
+
+const reconnectWS = () => {
+  liveLines.value = []
+  connectWS()
+}
+
+// ── File mode ──────────────────────────────────────────────────────────────
+const loading = ref(false)
+const lineCount = ref(200)
+const autoRefresh = ref(false)
 const emptyInfo: LogResponse = { source: '', file: '', lines: [], total: 0, file_size: 0, available: false }
 const proxydInfo = ref<LogResponse>({ ...emptyInfo })
 const mihomoInfo = ref<LogResponse>({ ...emptyInfo })
+let fileTimer: ReturnType<typeof setInterval> | null = null
 
 const currentInfo = computed(() =>
-  activeTab.value === 'proxyd' ? proxydInfo.value : mihomoInfo.value
+  mode.value === 'proxyd' ? proxydInfo.value : mihomoInfo.value
 )
 
-const filteredLines = computed(() => {
-  const lines = currentInfo.value.lines ?? []
-  if (!filterText.value.trim()) return lines
-  const q = filterText.value.toLowerCase()
-  return lines.filter(l => l.toLowerCase().includes(q))
-})
-
-const levelClass = (line: string): string => {
-  const l = line.toLowerCase()
-  if (l.includes('"level":"error"') || l.includes('error') || l.includes('fatal')) return 'level-error'
-  if (l.includes('"level":"warn"') || l.includes('warn')) return 'level-warn'
-  if (l.includes('"level":"debug"') || l.includes('debug')) return 'level-debug'
-  return 'level-info'
-}
-
-const formatBytes = (bytes: number): string => {
-  if (!bytes) return ''
-  if (bytes < 1024) return `${bytes} B`
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
-  return `${(bytes / 1024 / 1024).toFixed(1)} MB`
-}
-
 const fetchLogs = async () => {
+  if (mode.value === 'live') return
   loading.value = true
   try {
-    const res = await getLogs(activeTab.value, lineCount.value)
-    if (activeTab.value === 'proxyd') {
-      proxydInfo.value = res
-    } else {
-      mihomoInfo.value = res
-    }
-    if (!res.available && res.message) {
-      // Don't show error toast for "not configured" — just show in UI
-    }
+    const res = await getLogs(mode.value as 'proxyd' | 'mihomo', lineCount.value)
+    if (mode.value === 'proxyd') proxydInfo.value = res
+    else mihomoInfo.value = res
   } catch (e: any) {
     ElMessage.error(e.message || 'Failed to load logs')
   } finally {
@@ -163,141 +170,129 @@ const fetchLogs = async () => {
   }
 }
 
-const onTabChange = () => {
-  filterText.value = ''
-  fetchLogs()
+const toggleAutoRefresh = () => {
+  autoRefresh.value = !autoRefresh.value
+  if (autoRefresh.value) fileTimer = setInterval(fetchLogs, 5000)
+  else { if (fileTimer) clearInterval(fileTimer); fileTimer = null }
+}
+
+const download = () => downloadLog(mode.value as 'proxyd' | 'mihomo')
+
+// ── Shared ─────────────────────────────────────────────────────────────────
+const fileLines = computed(() =>
+  mode.value === 'proxyd' ? proxydInfo.value.lines : mihomoInfo.value.lines
+)
+
+const filteredLines = computed(() => {
+  const lines = mode.value === 'live' ? liveLines.value : (fileLines.value ?? [])
+  if (!filterText.value.trim()) return lines
+  const q = filterText.value.toLowerCase()
+  return lines.filter(l => l.toLowerCase().includes(q))
+})
+
+const levelClass = (line: string) => {
+  const l = line.toLowerCase()
+  if (l.includes('error') || l.includes('fatal')) return 'level-error'
+  if (l.includes('warn')) return 'level-warn'
+  if (l.includes('debug')) return 'level-debug'
+  return 'level-info'
+}
+
+const formatBytes = (bytes: number) => {
+  if (!bytes) return ''
+  if (bytes < 1024) return `${bytes} B`
+  if (bytes < 1048576) return `${(bytes / 1024).toFixed(1)} KB`
+  return `${(bytes / 1048576).toFixed(1)} MB`
+}
+
+const autoScroll = () => {
+  nextTick(() => {
+    const el = logContainer.value
+    if (!el) return
+    const nearBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 100
+    if (nearBottom) el.scrollTop = el.scrollHeight
+  })
 }
 
 const scrollToBottom = () => {
   nextTick(() => {
-    if (logContainer.value) {
-      logContainer.value.scrollTop = logContainer.value.scrollHeight
-    }
+    if (logContainer.value) logContainer.value.scrollTop = logContainer.value.scrollHeight
   })
 }
 
-// Auto-scroll when new lines arrive and user is near the bottom
-watch(filteredLines, () => {
-  if (!logContainer.value) return
-  const el = logContainer.value
-  const nearBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 80
-  if (nearBottom) scrollToBottom()
-})
-
-let timer: ReturnType<typeof setInterval> | null = null
-
-const download = () => {
-  downloadLog(activeTab.value)
-}
-
-const toggleAutoRefresh = () => {
-  autoRefresh.value = !autoRefresh.value
-  if (autoRefresh.value) {
-    timer = setInterval(fetchLogs, 5000)
+const onModeChange = () => {
+  filterText.value = ''
+  if (mode.value === 'live') {
+    connectWS()
   } else {
-    if (timer) clearInterval(timer)
-    timer = null
+    disconnectWS()
+    fetchLogs()
   }
 }
 
-onMounted(fetchLogs)
-
+onMounted(() => { connectWS() })
 onUnmounted(() => {
-  if (timer) clearInterval(timer)
+  disconnectWS()
+  if (fileTimer) clearInterval(fileTimer)
 })
 </script>
 
 <style scoped>
-.logs-view h1 {
-  margin: 0;
-  font-size: 24px;
-  font-weight: 600;
+.logs-view { display: flex; flex-direction: column; height: calc(100vh - 80px); gap: 8px; }
+
+.toolbar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: var(--cv-surface);
+  border: 1px solid var(--cv-border);
+  border-radius: var(--cv-radius);
+  padding: 6px 14px;
 }
 
-.page-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 16px;
-}
+.mode-tabs { flex: 1; margin-bottom: -8px; }
 
-.header-actions {
-  display: flex;
-  gap: 8px;
-  align-items: center;
-}
+:deep(.mode-tabs .el-tabs__header) { margin: 0; }
+:deep(.mode-tabs .el-tabs__nav-wrap::after) { display: none; }
+
+.toolbar-right { display: flex; gap: 8px; align-items: center; }
 
 .file-info {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 6px 12px;
-  background: #f5f7fa;
-  border: 1px solid #e4e7ed;
-  border-radius: 4px;
-  margin-bottom: 8px;
-  font-size: 13px;
-  color: #606266;
-}
-
-.file-path {
-  font-family: monospace;
-  color: #303133;
-  flex: 1;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.file-meta {
-  white-space: nowrap;
-  color: #909399;
+  padding: 5px 12px;
+  background: var(--cv-surface);
+  border: 1px solid var(--cv-border);
+  border-radius: var(--cv-radius-sm);
   font-size: 12px;
+  color: var(--cv-text-muted);
 }
+
+.file-path { font-family: monospace; color: var(--cv-text); flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.file-meta { white-space: nowrap; font-size: 11px; }
 
 .log-container {
+  flex: 1;
   font-family: 'Menlo', 'Monaco', 'Consolas', monospace;
   font-size: 12px;
   line-height: 1.6;
-  background: #1e1e1e;
+  background: #0d0f16;
   color: #d4d4d4;
-  border-radius: 6px;
+  border-radius: var(--cv-radius);
   padding: 12px;
-  height: calc(100vh - 280px);
-  min-height: 300px;
   overflow-y: auto;
-  border: 1px solid #3c3c3c;
+  border: 1px solid var(--cv-border);
 }
 
-.log-line {
-  padding: 1px 0;
-  white-space: pre-wrap;
-  word-break: break-all;
-}
-
-.log-line:hover {
-  background: rgba(255, 255, 255, 0.05);
-}
-
-.level-error { color: #f48771; }
-.level-warn  { color: #dcdcaa; }
-.level-debug { color: #9cdcfe; }
+.log-line { padding: 1px 0; white-space: pre-wrap; word-break: break-all; }
+.log-line:hover { background: rgba(255,255,255,0.04); }
+.level-error { color: #f87171; }
+.level-warn  { color: #fbbf24; }
+.level-debug { color: #7dd3fc; }
 .level-info  { color: #d4d4d4; }
 
-.log-empty {
-  display: flex;
-  justify-content: center;
-  padding: 40px 0;
-}
+.log-empty { display: flex; justify-content: center; padding: 40px 0; }
 
-.scroll-btn {
-  position: fixed;
-  bottom: 40px;
-  right: 40px;
-  z-index: 100;
-}
-
-:deep(.el-tabs__header) {
-  margin-bottom: 8px;
-}
+.scroll-btn { position: fixed; bottom: 40px; right: 40px; z-index: 100; }
 </style>

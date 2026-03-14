@@ -2,6 +2,7 @@ package api
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"strings"
 	"time"
@@ -133,4 +134,60 @@ func (h *Handler) buildWSSnapshot() wsSnapshot {
 	}
 
 	return snapshot
+}
+
+// MihomoLogStream proxies the mihomo /logs WebSocket to the browser client.
+// Query param: level=debug|info|warning|error (default: info)
+func (h *Handler) MihomoLogStream(c *gin.Context) {
+	level := c.DefaultQuery("level", "info")
+
+	// Upgrade the browser connection.
+	clientConn, err := wsUpgrader.Upgrade(c.Writer, c.Request, nil)
+	if err != nil {
+		return
+	}
+	defer clientConn.Close()
+
+	if !h.mihomoManager.IsRunning() {
+		msg, _ := json.Marshal(map[string]string{"type": "error", "payload": "mihomo is not running"})
+		_ = clientConn.WriteMessage(websocket.TextMessage, msg)
+		return
+	}
+
+	// Connect to mihomo log WebSocket.
+	mihomoURL := fmt.Sprintf("ws://127.0.0.1:%d/logs?level=%s", h.mihomoAPIPort, level)
+	mihomoConn, _, err := websocket.DefaultDialer.Dial(mihomoURL, nil)
+	if err != nil {
+		msg, _ := json.Marshal(map[string]string{"type": "error", "payload": "failed to connect to mihomo: " + err.Error()})
+		_ = clientConn.WriteMessage(websocket.TextMessage, msg)
+		return
+	}
+	defer mihomoConn.Close()
+
+	// Forward messages from mihomo → browser.
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		for {
+			mt, msg, err := mihomoConn.ReadMessage()
+			if err != nil {
+				return
+			}
+			if writeErr := clientConn.WriteMessage(mt, msg); writeErr != nil {
+				return
+			}
+		}
+	}()
+
+	// Keep alive until browser disconnects.
+	for {
+		select {
+		case <-done:
+			return
+		default:
+			if _, _, err := clientConn.ReadMessage(); err != nil {
+				return
+			}
+		}
+	}
 }

@@ -151,24 +151,51 @@
         <el-card class="info-card">
           <template #header>
             <div class="card-header">
-              <span>Traffic Statistics</span>
-              <el-button size="small" @click="refreshTraffic">Refresh</el-button>
+              <span>Network Speed</span>
+              <div style="display:flex;gap:16px;font-size:13px">
+                <span style="color:#5865f2">↑ {{ formatRate(upRate) }}</span>
+                <span style="color:#22d3ee">↓ {{ formatRate(downRate) }}</span>
+              </div>
             </div>
           </template>
-          <div class="traffic-stats">
-            <div class="traffic-item">
-              <el-icon class="traffic-icon upload"><Top /></el-icon>
-              <div>
-                <p class="traffic-label">Upload</p>
-                <p class="traffic-value">{{ formatBytes(proxyStore.traffic.up) }}</p>
-              </div>
-            </div>
-            <div class="traffic-item">
-              <el-icon class="traffic-icon download"><Bottom /></el-icon>
-              <div>
-                <p class="traffic-label">Download</p>
-                <p class="traffic-value">{{ formatBytes(proxyStore.traffic.down) }}</p>
-              </div>
+          <div class="speed-chart-wrap">
+            <svg :width="chartW" :height="chartH" class="speed-chart">
+              <!-- Up line -->
+              <polyline
+                v-if="upPoints.length > 1"
+                :points="upPoints"
+                fill="none"
+                stroke="#5865f2"
+                stroke-width="1.5"
+                stroke-linejoin="round"
+                stroke-linecap="round"
+              />
+              <!-- Up fill -->
+              <polygon
+                v-if="upPoints.length > 1"
+                :points="upFill"
+                fill="rgba(88,101,242,0.15)"
+              />
+              <!-- Down line -->
+              <polyline
+                v-if="downPoints.length > 1"
+                :points="downPoints"
+                fill="none"
+                stroke="#22d3ee"
+                stroke-width="1.5"
+                stroke-linejoin="round"
+                stroke-linecap="round"
+              />
+              <!-- Down fill -->
+              <polygon
+                v-if="downPoints.length > 1"
+                :points="downFill"
+                fill="rgba(34,211,238,0.1)"
+              />
+            </svg>
+            <div class="chart-labels">
+              <span style="color:#5865f2">↑ {{ formatBytes(proxyStore.traffic.up) }} total</span>
+              <span style="color:#22d3ee">↓ {{ formatBytes(proxyStore.traffic.down) }} total</span>
             </div>
           </div>
         </el-card>
@@ -184,7 +211,7 @@ import { useSystemStore } from '@/stores/system'
 import { useSourceStore } from '@/stores/source'
 import { useProxyStore } from '@/stores/proxy'
 import { controlMihomo, getMihomoVersion, updateMihomo } from '@/api/proxy'
-import { Odometer, CircleCheck, Download, Connection, Top, Bottom } from '@element-plus/icons-vue'
+import { Odometer, CircleCheck, Download, Connection } from '@element-plus/icons-vue'
 
 const systemStore = useSystemStore()
 const sourceStore = useSourceStore()
@@ -194,6 +221,61 @@ const mihomoVersion = ref<string>('')
 const loadingVersion = ref(false)
 const controlling = ref<string>('')
 const checkingUpdate = ref(false)
+
+// ── Speed chart ────────────────────────────────────────────────────────────
+const HISTORY = 60
+const chartW = 340
+const chartH = 100
+const upHistory = ref<number[]>(Array(HISTORY).fill(0))
+const downHistory = ref<number[]>(Array(HISTORY).fill(0))
+let prevUp = 0, prevDown = 0, prevTs = 0
+
+const upRate = computed(() => upHistory.value[upHistory.value.length - 1] ?? 0)
+const downRate = computed(() => downHistory.value[downHistory.value.length - 1] ?? 0)
+
+const toPoints = (data: number[], maxVal: number) => {
+  if (maxVal === 0) return ''
+  return data.map((v, i) => {
+    const x = (i / (HISTORY - 1)) * chartW
+    const y = chartH - (v / maxVal) * (chartH - 8)
+    return `${x.toFixed(1)},${y.toFixed(1)}`
+  }).join(' ')
+}
+
+const toFill = (points: string) => {
+  if (!points) return ''
+  return `0,${chartH} ${points} ${chartW},${chartH}`
+}
+
+const upPoints = computed(() => {
+  const m = Math.max(...upHistory.value, ...downHistory.value, 1)
+  return toPoints(upHistory.value, m)
+})
+const downPoints = computed(() => {
+  const m = Math.max(...upHistory.value, ...downHistory.value, 1)
+  return toPoints(downHistory.value, m)
+})
+const upFill = computed(() => toFill(upPoints.value))
+const downFill = computed(() => toFill(downPoints.value))
+
+const formatRate = (bps: number) => {
+  if (bps < 1024) return `${bps}B/s`
+  if (bps < 1048576) return `${(bps / 1024).toFixed(1)}KB/s`
+  return `${(bps / 1048576).toFixed(1)}MB/s`
+}
+
+const tickTraffic = () => {
+  const now = Date.now()
+  const { up, down } = proxyStore.traffic
+  if (prevTs > 0) {
+    const dt = (now - prevTs) / 1000
+    const upR = Math.max(0, Math.round((up - prevUp) / dt))
+    const downR = Math.max(0, Math.round((down - prevDown) / dt))
+    upHistory.value = [...upHistory.value.slice(1), upR]
+    downHistory.value = [...downHistory.value.slice(1), downR]
+  }
+  prevUp = up; prevDown = down; prevTs = now
+}
 
 const mihomoRunning = computed(() => systemStore.info?.mihomo_status === 'running')
 
@@ -314,9 +396,8 @@ const refreshSystem = async () => {
   await systemStore.fetchInfo()
 }
 
-const refreshTraffic = async () => {
-  await proxyStore.fetchTraffic()
-}
+
+let speedTimer: ReturnType<typeof setInterval> | null = null
 
 onMounted(async () => {
   await Promise.allSettled([
@@ -328,10 +409,16 @@ onMounted(async () => {
     fetchVersion(),
   ])
   systemStore.connectWS()
+  // Poll traffic every second to compute rates
+  speedTimer = setInterval(async () => {
+    await proxyStore.fetchTraffic(true)
+    tickTraffic()
+  }, 1000)
 })
 
 onUnmounted(() => {
   systemStore.disconnectWS()
+  if (speedTimer) clearInterval(speedTimer)
 })
 </script>
 
@@ -476,5 +563,25 @@ onUnmounted(() => {
   margin: 0;
   font-size: 18px;
   font-weight: 600;
+}
+
+.speed-chart-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.speed-chart {
+  display: block;
+  background: var(--cv-surface2);
+  border-radius: var(--cv-radius-sm);
+  width: 100%;
+  height: 100px;
+}
+
+.chart-labels {
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
 }
 </style>

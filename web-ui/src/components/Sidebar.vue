@@ -23,20 +23,21 @@
 <script setup lang="ts">
 import { useRoute } from 'vue-router'
 import {
-  Odometer, Download, Document, Connection,
-  Monitor, Tickets, Setting
+  Odometer, Connection, Files,
+  Share, List, Tickets, Monitor, Setting
 } from '@element-plus/icons-vue'
 
 const route = useRoute()
 
 const navItems = [
-  { path: '/',        label: 'Dashboard', icon: Odometer  },
-  { path: '/sources', label: 'Sources',   icon: Download  },
-  { path: '/config',  label: 'Config',    icon: Document  },
-  { path: '/proxies', label: 'Proxies',   icon: Connection },
-  { path: '/mihomo',  label: 'Mihomo',    icon: Monitor   },
-  { path: '/logs',    label: 'Logs',      icon: Tickets   },
-  { path: '/settings',label: 'Settings',  icon: Setting   },
+  { path: '/',           label: 'Dashboard',   icon: Odometer   },
+  { path: '/proxies',    label: 'Proxies',      icon: Connection },
+  { path: '/profiles',   label: 'Profiles',     icon: Files      },
+  { path: '/connections',label: 'Connections',  icon: Share      },
+  { path: '/rules',      label: 'Rules',        icon: List       },
+  { path: '/logs',       label: 'Logs',         icon: Tickets    },
+  { path: '/mihomo',     label: 'Mihomo',       icon: Monitor    },
+  { path: '/settings',   label: 'Settings',     icon: Setting    },
 ]
 
 const isActive = (path: string) => {
@@ -58,7 +59,6 @@ const isActive = (path: string) => {
   overflow: hidden;
 }
 
-/* Logo */
 .sidebar-logo {
   display: flex;
   align-items: center;
@@ -89,7 +89,6 @@ const isActive = (path: string) => {
   letter-spacing: 0.5px;
 }
 
-/* Nav */
 .nav {
   display: flex;
   flex-direction: column;
@@ -108,11 +107,10 @@ const isActive = (path: string) => {
   font-size: 13.5px;
   font-weight: 500;
   transition: all 0.15s ease;
-  cursor: pointer;
 }
 
 .nav-item:hover {
-  background: rgba(255, 255, 255, 0.05);
+  background: rgba(255,255,255,0.05);
   color: var(--cv-text);
 }
 
@@ -121,16 +119,6 @@ const isActive = (path: string) => {
   color: var(--cv-accent);
 }
 
-.nav-item.active .nav-icon {
-  color: var(--cv-accent);
-}
-
-.nav-icon {
-  font-size: 16px;
-  flex-shrink: 0;
-}
-
-.nav-label {
-  white-space: nowrap;
-}
+.nav-icon { font-size: 16px; flex-shrink: 0; }
+.nav-label { white-space: nowrap; }
 </style>

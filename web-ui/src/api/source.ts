@@ -59,9 +59,10 @@ export const testSource = (id: number): Promise<any> => {
   })
 }
 
-export const fetchSource = (id: number): Promise<any> => {
+export const fetchSource = (id: number): Promise<{ size: number; hash: string; last_fetch: string }> => {
   return request({
     url: `/sources/${id}/fetch`,
     method: 'POST'
   })
 }
+

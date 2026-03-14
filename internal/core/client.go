@@ -111,6 +111,25 @@ func (c *Client) SwitchProxy(group, proxy string) error {
 	return c.put(url, body, nil)
 }
 
+// GetConnections returns all active connections
+func (c *Client) GetConnections() (map[string]interface{}, error) {
+	var result map[string]interface{}
+	if err := c.get("/connections", &result); err != nil {
+		return nil, err
+	}
+	return result, nil
+}
+
+// CloseConnection closes a specific connection by ID
+func (c *Client) CloseConnection(id string) error {
+	return c.doRequest("DELETE", "/connections/"+id, nil, nil)
+}
+
+// CloseAllConnections closes all active connections
+func (c *Client) CloseAllConnections() error {
+	return c.doRequest("DELETE", "/connections", nil, nil)
+}
+
 // GetRules returns all rules
 func (c *Client) GetRules() (map[string]interface{}, error) {
 	var result map[string]interface{}

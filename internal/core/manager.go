@@ -273,6 +273,39 @@ func (m *Manager) GetProxy(name string) (map[string]interface{}, error) {
 	return client.GetProxy(name)
 }
 
+// GetConnections returns active connections
+func (m *Manager) GetConnections() (map[string]interface{}, error) {
+	m.mu.RLock()
+	client := m.client
+	m.mu.RUnlock()
+	if client == nil {
+		return nil, fmt.Errorf("mihomo is not running")
+	}
+	return client.GetConnections()
+}
+
+// CloseConnection closes a specific connection
+func (m *Manager) CloseConnection(id string) error {
+	m.mu.RLock()
+	client := m.client
+	m.mu.RUnlock()
+	if client == nil {
+		return fmt.Errorf("mihomo is not running")
+	}
+	return client.CloseConnection(id)
+}
+
+// CloseAllConnections closes all connections
+func (m *Manager) CloseAllConnections() error {
+	m.mu.RLock()
+	client := m.client
+	m.mu.RUnlock()
+	if client == nil {
+		return fmt.Errorf("mihomo is not running")
+	}
+	return client.CloseAllConnections()
+}
+
 // GetRules returns active rules
 func (m *Manager) GetRules() (map[string]interface{}, error) {
 	m.mu.RLock()

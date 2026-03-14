@@ -36,11 +36,12 @@ const userStore = useUserStore()
 
 const pageTitles: Record<string, string> = {
   '/': 'Dashboard',
-  '/sources': 'Sources',
-  '/config': 'Configuration',
   '/proxies': 'Proxies',
-  '/mihomo': 'Mihomo',
+  '/profiles': 'Profiles',
+  '/connections': 'Connections',
+  '/rules': 'Rules',
   '/logs': 'Logs',
+  '/mihomo': 'Mihomo',
   '/settings': 'Settings',
 }
 

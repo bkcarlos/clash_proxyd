@@ -26,6 +26,7 @@ func (h *Handler) SetupRouter(authManager *auth.Manager, corsOrigins []string) *
 		{
 			public.POST("/auth/login", h.Login)
 			public.GET("/system/ws", h.SystemWS)
+			public.GET("/proxy/mihomo/log-stream", h.MihomoLogStream)
 		}
 
 		// Protected routes
@@ -98,6 +99,9 @@ func (h *Handler) SetupRouter(authManager *auth.Manager, corsOrigins []string) *
 				proxy.PUT("/groups/:group", h.SwitchProxy)
 				proxy.GET("/groups", h.GetProxyGroups)
 				proxy.GET("/rules", h.GetRules)
+			proxy.GET("/connections", h.GetConnections)
+			proxy.DELETE("/connections", h.CloseAllConnections)
+			proxy.DELETE("/connections/:id", h.CloseConnection)
 				proxy.GET("/traffic", h.GetTraffic)
 				proxy.GET("/memory", h.GetMemory)
 				proxy.GET("/mihomo/version", h.MihomoVersion)
