@@ -160,38 +160,39 @@
           </template>
           <div class="speed-chart-wrap">
             <svg width="100%" :viewBox="`0 0 ${chartW} ${chartH}`" preserveAspectRatio="none" class="speed-chart">
+              <!-- Grid lines -->
+              <line v-for="n in 3" :key="n"
+                x1="0" :y1="(chartH / 4) * n"
+                :x2="chartW" :y2="(chartH / 4) * n"
+                stroke="rgba(255,255,255,0.06)" stroke-width="1"
+              />
+              <!-- Up fill -->
+              <polygon :points="upFill" fill="rgba(88,101,242,0.2)" />
+              <!-- Down fill -->
+              <polygon :points="downFill" fill="rgba(34,211,238,0.12)" />
               <!-- Up line -->
               <polyline
-                v-if="upPoints.length > 1"
                 :points="upPoints"
                 fill="none"
                 stroke="#5865f2"
-                stroke-width="1.5"
+                stroke-width="2"
                 stroke-linejoin="round"
                 stroke-linecap="round"
-              />
-              <!-- Up fill -->
-              <polygon
-                v-if="upPoints.length > 1"
-                :points="upFill"
-                fill="rgba(88,101,242,0.15)"
               />
               <!-- Down line -->
               <polyline
-                v-if="downPoints.length > 1"
                 :points="downPoints"
                 fill="none"
                 stroke="#22d3ee"
-                stroke-width="1.5"
+                stroke-width="2"
                 stroke-linejoin="round"
                 stroke-linecap="round"
               />
-              <!-- Down fill -->
-              <polygon
-                v-if="downPoints.length > 1"
-                :points="downFill"
-                fill="rgba(34,211,238,0.1)"
-              />
+              <!-- Max label -->
+              <text v-if="chartMax > 0"
+                x="4" y="12"
+                font-size="9" fill="rgba(255,255,255,0.3)"
+              >{{ formatRate(chartMax) }}</text>
             </svg>
             <div class="chart-labels">
               <span style="color:#5865f2">↑ {{ formatBytes(proxyStore.traffic.up) }} total</span>
@@ -233,28 +234,27 @@ let prevUp = 0, prevDown = 0, prevTs = 0
 const upRate = computed(() => upHistory.value[upHistory.value.length - 1] ?? 0)
 const downRate = computed(() => downHistory.value[downHistory.value.length - 1] ?? 0)
 
+// Use a minimum scale so lines are always visible even at 0
+const chartMax = computed(() =>
+  Math.max(...upHistory.value, ...downHistory.value, 1024) // at least 1KB/s scale
+)
+
 const toPoints = (data: number[], maxVal: number) => {
-  if (maxVal === 0) return ''
+  const pad = 6 // vertical padding so lines don't touch top/bottom edge
   return data.map((v, i) => {
     const x = (i / (HISTORY - 1)) * chartW
-    const y = chartH - (v / maxVal) * (chartH - 8)
+    const ratio = maxVal > 0 ? v / maxVal : 0
+    const y = chartH - pad - ratio * (chartH - pad * 2)
     return `${x.toFixed(1)},${y.toFixed(1)}`
   }).join(' ')
 }
 
 const toFill = (points: string) => {
-  if (!points) return ''
   return `0,${chartH} ${points} ${chartW},${chartH}`
 }
 
-const upPoints = computed(() => {
-  const m = Math.max(...upHistory.value, ...downHistory.value, 1)
-  return toPoints(upHistory.value, m)
-})
-const downPoints = computed(() => {
-  const m = Math.max(...upHistory.value, ...downHistory.value, 1)
-  return toPoints(downHistory.value, m)
-})
+const upPoints = computed(() => toPoints(upHistory.value, chartMax.value))
+const downPoints = computed(() => toPoints(downHistory.value, chartMax.value))
 const upFill = computed(() => toFill(upPoints.value))
 const downFill = computed(() => toFill(downPoints.value))
 
