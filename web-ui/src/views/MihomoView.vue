@@ -152,26 +152,60 @@
           </el-descriptions-item>
         </el-descriptions>
 
-        <div style="margin-top:14px;display:flex;gap:10px;align-items:center">
-          <el-input
-            v-model="mmdbUrl"
-            placeholder="Custom URL (leave empty for MetaCubeX default)"
-            clearable
-            style="flex:1"
-            :disabled="mmdbDownloading"
-          />
-          <el-button
-            type="primary"
-            :loading="mmdbDownloading"
-            @click="downloadMMDB"
-          >
-            <el-icon><Download /></el-icon>
-            {{ mmdb.exists ? 'Re-download' : 'Download' }}
-          </el-button>
-        </div>
-        <el-text v-if="mmdbDownloading" type="info" size="small" style="margin-top:8px;display:block">
-          Downloading... this may take a few minutes.
-        </el-text>
+        <el-tabs v-model="mmdbTab" style="margin-top:14px">
+          <!-- Download from URL -->
+          <el-tab-pane label="Download URL" name="url">
+            <div style="display:flex;gap:10px;align-items:center;padding:4px 0">
+              <el-input
+                v-model="mmdbUrl"
+                placeholder="Leave empty for MetaCubeX default (country.mmdb)"
+                clearable
+                style="flex:1"
+                :disabled="mmdbDownloading"
+              />
+              <el-button type="primary" :loading="mmdbDownloading" @click="downloadMMDB">
+                <el-icon><Download /></el-icon>
+                {{ mmdb.exists ? 'Re-download' : 'Download' }}
+              </el-button>
+            </div>
+            <el-text v-if="mmdbDownloading" type="info" size="small" style="margin-top:6px;display:block">
+              Downloading... this may take a few minutes.
+            </el-text>
+          </el-tab-pane>
+
+          <!-- Upload local file -->
+          <el-tab-pane label="Upload File" name="upload">
+            <div style="padding:4px 0">
+              <el-upload
+                drag
+                :auto-upload="false"
+                :limit="1"
+                accept=".mmdb"
+                :on-change="onMMDBFileChange"
+                :on-remove="() => mmdbFile = null"
+                style="width:100%"
+              >
+                <el-icon style="font-size:40px;color:var(--cv-text-muted)"><Upload /></el-icon>
+                <div style="margin-top:8px;color:var(--cv-text-muted)">
+                  Drag .mmdb file here or <em>click to select</em>
+                </div>
+                <div style="font-size:12px;color:var(--cv-text-muted);margin-top:4px">
+                  Supports Country.mmdb / GeoLite2-Country.mmdb
+                </div>
+              </el-upload>
+              <el-button
+                type="primary"
+                :loading="mmdbUploading"
+                :disabled="!mmdbFile"
+                style="margin-top:10px"
+                @click="uploadMMDB"
+              >
+                <el-icon><Upload /></el-icon>
+                Upload to Server
+              </el-button>
+            </div>
+          </el-tab-pane>
+        </el-tabs>
       </template>
     </el-card>
 
@@ -279,7 +313,7 @@
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { ElMessage } from 'element-plus'
 import {
-  Refresh, Download, VideoPlay, VideoPause, RefreshRight
+  Refresh, Download, VideoPlay, VideoPause, RefreshRight, Upload
 } from '@element-plus/icons-vue'
 import {
   getMihomoInstallStatus,
@@ -310,7 +344,38 @@ let pollTimer: ReturnType<typeof setInterval> | null = null
 const mmdb = ref<{ exists: boolean; path: string; size: number } | null>(null)
 const mmdbLoading = ref(false)
 const mmdbDownloading = ref(false)
+const mmdbUploading = ref(false)
 const mmdbUrl = ref('')
+const mmdbTab = ref('url')
+const mmdbFile = ref<File | null>(null)
+
+const onMMDBFileChange = (uploadFile: any) => {
+  mmdbFile.value = uploadFile.raw ?? null
+}
+
+const uploadMMDB = async () => {
+  if (!mmdbFile.value) return
+  mmdbUploading.value = true
+  try {
+    const form = new FormData()
+    form.append('file', mmdbFile.value)
+    const token = localStorage.getItem('token') || ''
+    const res = await fetch('/api/v1/proxy/mihomo/mmdb/upload', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}` },
+      body: form,
+    })
+    const data = await res.json()
+    if (!res.ok) throw new Error(data.error || 'Upload failed')
+    ElMessage.success('MMDB uploaded successfully')
+    mmdbFile.value = null
+    await loadMMDB()
+  } catch (e: any) {
+    ElMessage.error(e.message || 'Upload failed')
+  } finally {
+    mmdbUploading.value = false
+  }
+}
 
 const loadMMDB = async () => {
   mmdbLoading.value = true

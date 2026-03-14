@@ -385,6 +385,53 @@ func (h *Handler) MihomoMMDBDownload(c *gin.Context) {
 	})
 }
 
+// MihomoMMDBUpload accepts a multipart file upload and saves it as Country.mmdb.
+func (h *Handler) MihomoMMDBUpload(c *gin.Context) {
+	file, header, err := c.Request.FormFile("file")
+	if err != nil {
+		h.respondError(c, http.StatusBadRequest, "file field required: "+err.Error())
+		return
+	}
+	defer file.Close()
+
+	if header.Size > 100<<20 { // 100 MB guard
+		h.respondError(c, http.StatusBadRequest, "file too large (max 100MB)")
+		return
+	}
+
+	mmdbPath := filepath.Join(h.mihomoConfigDir, "Country.mmdb")
+	if err := os.MkdirAll(filepath.Dir(mmdbPath), 0755); err != nil {
+		h.respondError(c, http.StatusInternalServerError, "failed to create dir: "+err.Error())
+		return
+	}
+
+	tmp := mmdbPath + ".tmp"
+	f, err := os.Create(tmp)
+	if err != nil {
+		h.respondError(c, http.StatusInternalServerError, "failed to create file: "+err.Error())
+		return
+	}
+	written, err := io.Copy(f, file)
+	f.Close()
+	if err != nil {
+		os.Remove(tmp)
+		h.respondError(c, http.StatusInternalServerError, "write failed: "+err.Error())
+		return
+	}
+	if err := os.Rename(tmp, mmdbPath); err != nil {
+		os.Remove(tmp)
+		h.respondError(c, http.StatusInternalServerError, "install failed: "+err.Error())
+		return
+	}
+
+	h.auditLog(c, "mmdb_uploaded", "mihomo", fmt.Sprintf("MMDB uploaded %d bytes (%s)", written, header.Filename))
+	h.respondSuccess(c, "MMDB uploaded successfully", gin.H{
+		"path":     mmdbPath,
+		"size":     written,
+		"filename": header.Filename,
+	})
+}
+
 // MihomoInstallStatus returns a consolidated installation status: binary existence,
 // current version, latest upstream version, update availability, and process state.
 func (h *Handler) MihomoInstallStatus(c *gin.Context) {

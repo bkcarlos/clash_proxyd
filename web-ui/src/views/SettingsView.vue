@@ -45,7 +45,7 @@
         <div class="card-header-row">
           <span>Terminal Proxy Config</span>
           <el-tag :type="proxyStatus.running ? 'success' : 'info'" size="small">
-            {{ proxyStatus.running ? `Port ${proxyStatus.port}` : 'Mihomo not running' }}
+            {{ proxyStatus.running ? `Running · ${proxyHost}:${proxyPort}` : 'Mihomo not running' }}
           </el-tag>
         </div>
       </template>
@@ -252,13 +252,27 @@ const psCmds = computed(() => [
 ])
 const psAll = computed(() => psCmds.value.map(c => c.value).join('; '))
 
-const copy = async (text: string) => {
-  try {
-    await navigator.clipboard.writeText(text)
-    ElMessage.success('Copied!')
-  } catch {
-    ElMessage.error('Copy failed')
+const copy = (text: string) => {
+  // Prefer clipboard API, fall back to execCommand for non-HTTPS / non-localhost
+  if (navigator.clipboard?.writeText) {
+    navigator.clipboard.writeText(text)
+      .then(() => ElMessage.success('Copied!'))
+      .catch(() => copyFallback(text))
+  } else {
+    copyFallback(text)
   }
+}
+
+const copyFallback = (text: string) => {
+  const el = document.createElement('textarea')
+  el.value = text
+  el.style.cssText = 'position:fixed;top:-9999px;left:-9999px'
+  document.body.appendChild(el)
+  el.focus()
+  el.select()
+  const ok = document.execCommand('copy')
+  document.body.removeChild(el)
+  ok ? ElMessage.success('Copied!') : ElMessage.error('Copy failed')
 }
 
 onMounted(async () => {
