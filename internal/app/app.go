@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"io/fs"
 	"net/http"
+	"net/http/httputil"
+	"net/url"
 	"os"
 	"os/signal"
 	"path/filepath"
@@ -252,11 +254,14 @@ func (a *App) Start() error {
 		}
 	}()
 
-	// Start dedicated web UI server when web_port is configured
+	// Start dedicated web UI server when web_port is configured.
+	// The web server also reverse-proxies /api, /health and /ping to the API
+	// server so that the browser can use relative URLs from any origin.
 	if a.webFS != nil && a.cfg.Server.WebPort > 0 {
+		apiTarget := fmt.Sprintf("http://127.0.0.1:%d", a.cfg.Server.Port)
 		a.webServer = &http.Server{
 			Addr:           fmt.Sprintf("%s:%d", a.cfg.Server.Host, a.cfg.Server.WebPort),
-			Handler:        spaHandler(a.webFS),
+			Handler:        spaHandler(a.webFS, apiTarget),
 			ReadTimeout:    30 * time.Second,
 			WriteTimeout:   30 * time.Second,
 			MaxHeaderBytes: 1 << 20,
@@ -508,15 +513,35 @@ func (a *App) Run() error {
 	return nil
 }
 
-// spaHandler returns a bare net/http handler that serves a Vue SPA from fsys.
-// Known files are served directly; all other paths fall back to index.html
-// so that Vue Router's HTML5 history mode works correctly.
-func spaHandler(fsys fs.FS) http.Handler {
+// spaHandler returns a handler that:
+//  1. Reverse-proxies /api/, /health and /ping to the API server at apiTarget,
+//     so the browser can use relative URLs regardless of which port loads the UI.
+//  2. Serves known static files directly from the embedded FS.
+//  3. Falls back to index.html for all other paths (Vue Router history mode).
+func spaHandler(fsys fs.FS, apiTarget string) http.Handler {
+	// Build a reverse proxy that forwards API traffic to the API server.
+	target, _ := url.Parse(apiTarget)
+	proxy := httputil.NewSingleHostReverseProxy(target)
+	// Preserve the original Host header so API CORS/logging works correctly.
+	origDirector := proxy.Director
+	proxy.Director = func(req *http.Request) {
+		origDirector(req)
+		req.Host = target.Host
+	}
+
 	fileServer := http.FileServer(http.FS(fsys))
+
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		path := r.URL.Path
+		// Forward API and health-check paths to the API server.
+		if strings.HasPrefix(path, "/api/") ||
+			path == "/health" ||
+			path == "/ping" {
+			proxy.ServeHTTP(w, r)
+			return
+		}
+		// Serve known static assets directly.
 		if path != "/" {
-			// Strip leading slash before opening from the embedded FS.
 			f, err := fsys.Open(strings.TrimPrefix(path, "/"))
 			if err == nil {
 				f.Close()
@@ -524,7 +549,7 @@ func spaHandler(fsys fs.FS) http.Handler {
 				return
 			}
 		}
-		// Unknown path → hand off to index.html for SPA routing.
+		// Everything else → index.html (SPA client-side routing).
 		r.URL.Path = "/"
 		fileServer.ServeHTTP(w, r)
 	})
