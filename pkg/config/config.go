@@ -141,6 +141,18 @@ func Load(path string) (*Config, error) {
 	if cfg.Mihomo.ReleaseAPI == "" {
 		cfg.Mihomo.ReleaseAPI = defaultMihomoReleaseAPI
 	}
+	if cfg.Subscription.UserAgent == "" {
+		cfg.Subscription.UserAgent = "clash.meta"
+	}
+	if cfg.Subscription.Timeout <= 0 {
+		cfg.Subscription.Timeout = 30
+	}
+	if cfg.Subscription.MaxRetries <= 0 {
+		cfg.Subscription.MaxRetries = 3
+	}
+	if cfg.Subscription.RetryDelay <= 0 {
+		cfg.Subscription.RetryDelay = 5
+	}
 	if cfg.Mihomo.ConfigDir == "" {
 		cfg.Mihomo.ConfigDir = "data/mihomo"
 	}

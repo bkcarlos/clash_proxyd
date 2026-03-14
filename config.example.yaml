@@ -80,7 +80,7 @@ subscription:
   # Request timeout in seconds
   timeout: 30
   # User agent for subscription requests
-  user_agent: "clash-proxyd/1.0"
+  user_agent: "clash.meta"
   # Max retries for failed downloads
   max_retries: 3
   # Retry delay in seconds

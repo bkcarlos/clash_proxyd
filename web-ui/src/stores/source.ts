@@ -21,13 +21,15 @@ export const useSourceStore = defineStore('source', () => {
     }
   }
 
-  const createSource = async (data: Omit<Source, 'id' | 'created_at' | 'updated_at'>): Promise<Source> => {
+  const createSource = async (data: Omit<Source, 'id' | 'created_at' | 'updated_at'>): Promise<any> => {
     loading.value = true
     error.value = null
     try {
-      const source = await sourceApi.createSource(data)
-      sources.value.push(source)
-      return source
+      const res = await sourceApi.createSource(data)
+      // Backend returns { source, warning? } on create
+      const src = (res as any)?.source ?? res
+      sources.value.push(src)
+      return res
     } catch (err) {
       error.value = err instanceof Error ? err.message : 'Failed to create source'
       throw err

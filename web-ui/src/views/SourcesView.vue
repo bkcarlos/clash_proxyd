@@ -29,9 +29,18 @@
         </template>
       </el-table-column>
       <el-table-column prop="priority" label="Priority" width="100" />
-      <el-table-column prop="update_interval" label="Interval" width="120">
+      <el-table-column prop="update_interval" label="Interval" width="100">
         <template #default="{ row }">
           {{ formatInterval(row.update_interval) }}
+        </template>
+      </el-table-column>
+      <el-table-column label="Cache" width="160">
+        <template #default="{ row }">
+          <div v-if="row.last_fetch" style="font-size:12px">
+            <el-tag type="success" size="small">{{ formatSize(row.content_size) }}</el-tag>
+            <div style="color:#909399;margin-top:2px">{{ formatTime(row.last_fetch) }}</div>
+          </div>
+          <el-tag v-else type="warning" size="small">No cache</el-tag>
         </template>
       </el-table-column>
       <el-table-column label="Actions" width="220" fixed="right">
@@ -153,10 +162,20 @@ const getTypeTagType = (type: string) => {
 }
 
 const formatInterval = (seconds: number): string => {
-  if (seconds >= 3600) {
-    return `${seconds / 3600}h`
-  }
+  if (seconds >= 3600) return `${seconds / 3600}h`
   return `${seconds / 60}m`
+}
+
+const formatSize = (bytes: number): string => {
+  if (!bytes) return '0 B'
+  if (bytes < 1024) return `${bytes} B`
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
+  return `${(bytes / 1024 / 1024).toFixed(1)} MB`
+}
+
+const formatTime = (iso: string): string => {
+  if (!iso) return ''
+  return new Date(iso).toLocaleString()
 }
 
 const showCreateDialog = () => {
@@ -191,8 +210,12 @@ const handleSubmit = async () => {
         await sourceStore.updateSource(form.id!, form as Source)
         ElMessage.success('Source updated successfully')
       } else {
-        await sourceStore.createSource(form as Source)
-        ElMessage.success('Source created successfully')
+        const res: any = await sourceStore.createSource(form as Source)
+        if (res?.warning) {
+          ElMessage.warning('Source saved, but initial fetch failed: ' + res.warning)
+        } else {
+          ElMessage.success('Source created and content cached successfully')
+        }
       }
       dialogVisible.value = false
       await sourceStore.fetchSources()

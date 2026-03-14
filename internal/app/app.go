@@ -67,6 +67,11 @@ func New(cfg *config.Config) (*App, error) {
 
 	logx.Info("Database initialized", zap.String("path", cfg.Database.Path))
 
+	// Migrate schema: add content cache columns to sources if not present.
+	if err := migrateSourcesTable(db); err != nil {
+		return nil, fmt.Errorf("failed to migrate sources table: %w", err)
+	}
+
 	// Initialize stores
 	sourceStore := store.NewSourceStore(db)
 	settingStore := store.NewSettingStore(db)
@@ -128,6 +133,10 @@ func New(cfg *config.Config) (*App, error) {
 		cfg.Mihomo.APIPort,
 		cfg.Logging.FilePath,
 		cfg.Mihomo.LogDir,
+		cfg.Subscription.UserAgent,
+		cfg.Subscription.Timeout,
+		cfg.Subscription.MaxRetries,
+		cfg.Subscription.RetryDelay,
 	)
 
 	return &App{
@@ -178,7 +187,7 @@ func (a *App) Start() error {
 			if getErr != nil {
 				return getErr
 			}
-			fetcher := source.NewFetcher("clash-proxyd", 30, 3, 5)
+			fetcher := source.NewFetcher(a.cfg.Subscription.UserAgent, a.cfg.Subscription.Timeout, a.cfg.Subscription.MaxRetries, a.cfg.Subscription.RetryDelay)
 			if src.Type == "http" {
 				_, getErr = fetcher.Fetch(src.URL)
 			} else {
@@ -216,6 +225,31 @@ func (a *App) Start() error {
 	}()
 
 	logx.Info("Application started successfully")
+	return nil
+}
+
+// migrateSourcesTable adds content-caching columns when upgrading from an older schema.
+func migrateSourcesTable(db *store.DB) error {
+	migrations := []struct {
+		col string
+		ddl string
+	}{
+		{"content", "ALTER TABLE sources ADD COLUMN content TEXT"},
+		{"content_size", "ALTER TABLE sources ADD COLUMN content_size INTEGER DEFAULT 0"},
+		{"last_fetch", "ALTER TABLE sources ADD COLUMN last_fetch DATETIME"},
+	}
+	for _, m := range migrations {
+		// Check if column exists by attempting a SELECT.
+		var dummy any
+		err := db.QueryRow("SELECT " + m.col + " FROM sources LIMIT 1").Scan(&dummy)
+		if err != nil && err.Error() != "sql: no rows in result set" {
+			// Column missing — add it.
+			if _, execErr := db.Exec(m.ddl); execErr != nil {
+				return fmt.Errorf("add column %s: %w", m.col, execErr)
+			}
+			logx.Info("DB migration: added column", zap.String("column", "sources."+m.col))
+		}
+	}
 	return nil
 }
 

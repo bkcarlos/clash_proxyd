@@ -29,7 +29,6 @@ func (h *Handler) loadSourceConfigs(sourceIDs []int) ([]types.Source, []map[stri
 	sources := make([]types.Source, 0, len(sourceIDs))
 	configs := make([]map[string]interface{}, 0, len(sourceIDs))
 	yamlParser := parser.NewParser()
-	fetcher := source.NewFetcher("clash-proxyd", 30, 3, 5)
 
 	for _, id := range sourceIDs {
 		src, err := h.sourceStore.GetByID(id)
@@ -41,13 +40,17 @@ func (h *Handler) loadSourceConfigs(sourceIDs []int) ([]types.Source, []map[stri
 		}
 
 		var content []byte
-		if src.Type == "http" {
-			content, err = fetcher.Fetch(src.URL)
+
+		// Use cached content when available — avoids re-fetching one-time URLs.
+		if src.Content != "" {
+			content = []byte(src.Content)
 		} else {
-			content, err = fetcher.FetchFromFile(src.Path)
-		}
-		if err != nil {
-			return nil, nil, fmt.Errorf("failed to fetch source %s: %w", src.Name, err)
+			// No cache yet: fetch now and store for future use.
+			content, err = h.fetchSourceContent(src)
+			if err != nil {
+				return nil, nil, fmt.Errorf("failed to fetch source %s (no cache): %w", src.Name, err)
+			}
+			_ = h.sourceStore.UpdateContent(src.ID, content)
 		}
 
 		cfg, err := yamlParser.Parse(content)
@@ -55,7 +58,6 @@ func (h *Handler) loadSourceConfigs(sourceIDs []int) ([]types.Source, []map[stri
 			return nil, nil, fmt.Errorf("failed to parse source %s: %w", src.Name, err)
 		}
 
-		_ = h.sourceStore.UpdateLastFetch(src.ID)
 		sources = append(sources, *src)
 		configs = append(configs, cfg)
 	}

@@ -4,10 +4,13 @@ import (
 	"net/http"
 	"os"
 	"strconv"
+	"time"
 
+	"github.com/clash-proxyd/proxyd/internal/logx"
 	"github.com/clash-proxyd/proxyd/internal/source"
 	"github.com/clash-proxyd/proxyd/internal/types"
 	"github.com/gin-gonic/gin"
+	"go.uber.org/zap"
 )
 
 func (h *Handler) syncSourceSchedule(source *types.Source) {
@@ -27,7 +30,7 @@ func (h *Handler) updateSourceNow(sourceID int) error {
 		return err
 	}
 
-	fetcher := source.NewFetcher("clash-proxyd", 30, 3, 5)
+	fetcher := h.newFetcher()
 	if src.Type == "http" {
 		_, err = fetcher.Fetch(src.URL)
 	} else {
@@ -122,9 +125,24 @@ func (h *Handler) CreateSource(c *gin.Context) {
 		return
 	}
 
+	// Immediately fetch and cache the subscription content so users don't
+	// need a separate Fetch step (important for one-time-use subscription URLs).
+	fetchErr := h.fetchAndCacheSource(source)
+	if fetchErr != nil {
+		// Non-fatal: source is saved; warn in the response so the user knows.
+		h.syncSourceSchedule(source)
+		h.auditLog(c, "create_source", "source", "Created source (fetch failed): "+source.Name)
+		// Return the source with a warning field.
+		h.respondJSON(c, http.StatusCreated, gin.H{
+			"source":   source,
+			"warning":  "Source saved but initial fetch failed: " + fetchErr.Error(),
+		})
+		return
+	}
+
 	h.syncSourceSchedule(source)
 	h.auditLog(c, "create_source", "source", "Created source: "+source.Name)
-	h.respondJSON(c, http.StatusCreated, source)
+	h.respondJSON(c, http.StatusCreated, gin.H{"source": source})
 }
 
 // UpdateSource updates a source
@@ -215,7 +233,8 @@ func (h *Handler) TestSource(c *gin.Context) {
 	// Test the source
 	var result types.TestResult
 	if src.Type == "http" {
-		success, latency, err := source.TestSubscription(src.URL, 10)
+		fetcher := h.newFetcher()
+		success, latency, err := fetcher.TestURL(src.URL)
 		result.Success = success
 		result.Latency = latency
 		if err != nil {
@@ -249,28 +268,39 @@ func (h *Handler) FetchSource(c *gin.Context) {
 		return
 	}
 
-	// Fetch source content
-	var content []byte
-	if src.Type == "http" {
-		fetcher := source.NewFetcher("clash-proxyd", 30, 3, 5)
-		content, err = fetcher.Fetch(src.URL)
-	} else {
-		fetcher := source.NewFetcher("clash-proxyd", 30, 3, 5)
-		content, err = fetcher.FetchFromFile(src.Path)
-	}
-
+	content, err := h.fetchSourceContent(src)
 	if err != nil {
 		h.respondError(c, http.StatusInternalServerError, "Failed to fetch source: "+err.Error())
 		return
 	}
 
-	// Update last fetch time
-	h.sourceStore.UpdateLastFetch(id)
+	// Cache the fetched content.
+	if cacheErr := h.sourceStore.UpdateContent(id, content); cacheErr != nil {
+		logx.Warn("Failed to cache source content", zap.Int("id", id), zap.Error(cacheErr))
+	}
 
 	h.auditLog(c, "fetch_source", "source", "Fetched source: "+src.Name)
 	h.respondJSON(c, http.StatusOK, gin.H{
-		"content": string(content),
-		"size":    len(content),
-		"hash":    source.Hash(content),
+		"size":       len(content),
+		"hash":       source.Hash(content),
+		"last_fetch": time.Now(),
 	})
+}
+
+// fetchSourceContent fetches raw content from a source (http or file).
+func (h *Handler) fetchSourceContent(src *types.Source) ([]byte, error) {
+	fetcher := h.newFetcher()
+	if src.Type == "http" {
+		return fetcher.Fetch(src.URL)
+	}
+	return fetcher.FetchFromFile(src.Path)
+}
+
+// fetchAndCacheSource fetches content and writes it to the DB cache.
+func (h *Handler) fetchAndCacheSource(src *types.Source) error {
+	content, err := h.fetchSourceContent(src)
+	if err != nil {
+		return err
+	}
+	return h.sourceStore.UpdateContent(src.ID, content)
 }

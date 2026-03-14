@@ -12,6 +12,7 @@ import (
 	"github.com/clash-proxyd/proxyd/internal/logx"
 	"github.com/clash-proxyd/proxyd/internal/renderer"
 	"github.com/clash-proxyd/proxyd/internal/scheduler"
+	"github.com/clash-proxyd/proxyd/internal/source"
 	"github.com/clash-proxyd/proxyd/internal/store"
 	"github.com/clash-proxyd/proxyd/internal/types"
 	"github.com/gin-gonic/gin"
@@ -36,6 +37,10 @@ type Handler struct {
 	proxydLogFile   string
 	mihomoLogDir    string
 	installJob      *InstallJob
+	subUserAgent    string
+	subTimeout      int
+	subMaxRetries   int
+	subRetryDelay   int
 
 	proxyDelayTTL   time.Duration
 	proxyDelayCache map[string]proxyDelayCacheItem
@@ -63,6 +68,10 @@ func NewHandler(
 	mihomoAPIPort int,
 	proxydLogFile string,
 	mihomoLogDir string,
+	subUserAgent string,
+	subTimeout int,
+	subMaxRetries int,
+	subRetryDelay int,
 ) *Handler {
 	return &Handler{
 		authManager:     authManager,
@@ -79,9 +88,34 @@ func NewHandler(
 		mihomoAPIPort:   mihomoAPIPort,
 		proxydLogFile:   proxydLogFile,
 		mihomoLogDir:    mihomoLogDir,
+		subUserAgent:    subUserAgent,
+		subTimeout:      subTimeout,
+		subMaxRetries:   subMaxRetries,
+		subRetryDelay:   subRetryDelay,
 		proxyDelayTTL:   15 * time.Second,
 		proxyDelayCache: make(map[string]proxyDelayCacheItem),
 	}
+}
+
+// newFetcher creates a subscription fetcher with the configured settings.
+func (h *Handler) newFetcher() *source.Fetcher {
+	ua := h.subUserAgent
+	if ua == "" {
+		ua = "clash.meta"
+	}
+	timeout := h.subTimeout
+	if timeout <= 0 {
+		timeout = 30
+	}
+	retries := h.subMaxRetries
+	if retries <= 0 {
+		retries = 3
+	}
+	delay := h.subRetryDelay
+	if delay <= 0 {
+		delay = 5
+	}
+	return source.NewFetcher(ua, timeout, retries, delay)
 }
 
 // ErrorResponse represents an error response

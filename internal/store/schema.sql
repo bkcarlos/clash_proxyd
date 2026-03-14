@@ -13,6 +13,9 @@ CREATE TABLE IF NOT EXISTS sources (
     enabled BOOLEAN DEFAULT 1,
     priority INTEGER DEFAULT 0,
     config_override TEXT,
+    content TEXT,
+    content_size INTEGER DEFAULT 0,
+    last_fetch DATETIME,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );

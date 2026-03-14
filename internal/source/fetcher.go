@@ -122,31 +122,26 @@ func Save(data []byte, path string) error {
 	return nil
 }
 
-// TestSubscription tests a subscription URL
-func TestSubscription(url string, timeout int) (bool, int, error) {
-	client := &http.Client{
-		Timeout: time.Duration(timeout) * time.Second,
-	}
-
+// TestURL tests a subscription URL using the fetcher's configured User-Agent.
+func (f *Fetcher) TestURL(url string) (bool, int, error) {
 	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
 		return false, 0, err
 	}
-
-	req.Header.Set("User-Agent", "clash-proxyd/test")
+	req.Header.Set("User-Agent", f.userAgent)
+	req.Header.Set("Accept", "*/*")
 
 	start := time.Now()
-	resp, err := client.Do(req)
+	resp, err := f.client.Do(req)
 	if err != nil {
 		return false, 0, err
 	}
 	defer resp.Body.Close()
+	_, _ = io.ReadAll(resp.Body) // drain body
 
 	latency := int(time.Since(start).Milliseconds())
-
 	if resp.StatusCode != http.StatusOK {
 		return false, latency, fmt.Errorf("unexpected status code: %d", resp.StatusCode)
 	}
-
 	return true, latency, nil
 }

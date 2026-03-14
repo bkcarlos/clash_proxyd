@@ -4,18 +4,22 @@ import "time"
 
 // Source represents a subscription source
 type Source struct {
-	ID              int       `json:"id"`
-	Name            string    `json:"name" binding:"required"`
-	Type            string    `json:"type" binding:"required,oneof=http file local"`
-	URL             string    `json:"url,omitempty"`
-	Path            string    `json:"path,omitempty"`
-	UpdateInterval  int       `json:"update_interval"`
-	UpdateCron      string    `json:"update_cron,omitempty"`
-	Enabled         bool      `json:"enabled"`
-	Priority        int       `json:"priority"`
-	ConfigOverride  string    `json:"config_override,omitempty"`
-	CreatedAt       time.Time `json:"created_at"`
-	UpdatedAt       time.Time `json:"updated_at"`
+	ID             int        `json:"id"`
+	Name           string     `json:"name" binding:"required"`
+	Type           string     `json:"type" binding:"required,oneof=http file local"`
+	URL            string     `json:"url,omitempty"`
+	Path           string     `json:"path,omitempty"`
+	UpdateInterval int        `json:"update_interval"`
+	UpdateCron     string     `json:"update_cron,omitempty"`
+	Enabled        bool       `json:"enabled"`
+	Priority       int        `json:"priority"`
+	ConfigOverride string     `json:"config_override,omitempty"`
+	// Cached subscription content — populated on create and on manual Fetch.
+	Content        string     `json:"content,omitempty"`
+	ContentSize    int        `json:"content_size"`
+	LastFetch      *time.Time `json:"last_fetch,omitempty"`
+	CreatedAt      time.Time  `json:"created_at"`
+	UpdatedAt      time.Time  `json:"updated_at"`
 }
 
 // Setting represents a system setting
