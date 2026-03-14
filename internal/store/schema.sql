@@ -85,6 +85,3 @@ INSERT OR IGNORE INTO settings (key, value, description) VALUES
     ('admin_username', 'admin', 'Admin username'),
     ('admin_password', 'admin', 'Admin password');
 
--- Insert initial runtime state
-INSERT OR IGNORE INTO runtime (pid, port, config_path, status) VALUES
-    (NULL, 7890, '', 'stopped');
