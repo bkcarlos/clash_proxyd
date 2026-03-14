@@ -1,5 +1,6 @@
 # Binaries
 proxyd
+!release/proxyd
 *.exe
 *.dll
 *.so

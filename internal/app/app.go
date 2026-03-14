@@ -178,17 +178,11 @@ func New(cfg *config.Config) (*App, error) {
 	}, nil
 }
 
-// InitDB initializes the database schema
+// InitDB re-applies the embedded schema (idempotent). Kept for the -init-db CLI flag.
 func (a *App) InitDB() error {
-	schemaSQL, err := os.ReadFile("internal/store/schema.sql")
-	if err != nil {
-		return fmt.Errorf("failed to read schema: %w", err)
-	}
-
-	if err := a.db.InitSchema(string(schemaSQL)); err != nil {
+	if err := a.db.InitSchema(); err != nil {
 		return fmt.Errorf("failed to init schema: %w", err)
 	}
-
 	logx.Info("Database schema initialized")
 	return nil
 }
