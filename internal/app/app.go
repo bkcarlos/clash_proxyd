@@ -353,8 +353,10 @@ rules:
 //  1. Last known config path recorded in the runtime table
 //  2. Default runtime.yaml in the mihomo config dir (bootstrap config)
 func (a *App) autoStartMihomo() {
-	configPath := filepath.Join(a.cfg.Mihomo.ConfigDir, "runtime.yaml")
+	// Kill any stale mihomo process left over from a previous proxyd session.
+	a.killStaleMihomo()
 
+	configPath := filepath.Join(a.cfg.Mihomo.ConfigDir, "runtime.yaml")
 	if a.runtimeStore != nil {
 		if rt, err := a.runtimeStore.Get(); err == nil && rt != nil && rt.ConfigPath != "" {
 			configPath = rt.ConfigPath
@@ -367,6 +369,31 @@ func (a *App) autoStartMihomo() {
 	} else {
 		logx.Info("Mihomo started successfully")
 	}
+}
+
+// killStaleMihomo terminates any mihomo process whose PID is recorded in the
+// runtime table. This handles the case where proxyd was killed hard (SIGKILL
+// before Pdeathsig was set) and left an orphan mihomo behind.
+func (a *App) killStaleMihomo() {
+	if a.runtimeStore == nil {
+		return
+	}
+	rt, err := a.runtimeStore.Get()
+	if err != nil || rt == nil || rt.PID <= 0 {
+		return
+	}
+	proc, err := os.FindProcess(rt.PID)
+	if err != nil {
+		return
+	}
+	// Signal 0 checks liveness without side effects.
+	if err := proc.Signal(syscall.Signal(0)); err != nil {
+		return // process already dead
+	}
+	logx.Info("Killing stale mihomo process", zap.Int("pid", rt.PID))
+	_ = proc.Signal(syscall.SIGTERM)
+	time.Sleep(500 * time.Millisecond)
+	_ = proc.Kill() // force-kill if still alive
 }
 
 func (a *App) checkAndApplyMihomoUpdate() {
