@@ -16,9 +16,6 @@
       <el-button type="primary" :loading="busy" @click="addProfile">
         <el-icon><Plus /></el-icon>Add
       </el-button>
-      <el-button :loading="applying" :disabled="busy || sources.length === 0" @click="applyAll">
-        <el-icon><Promotion /></el-icon>Apply All
-      </el-button>
     </div>
 
     <!-- Step progress (shown while adding) -->
@@ -126,7 +123,7 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Plus, Refresh, Delete, Link, Promotion, CircleCheck, CircleClose } from '@element-plus/icons-vue'
+import { Plus, Refresh, Delete, Link, CircleCheck, CircleClose } from '@element-plus/icons-vue'
 import * as sourceApi from '@/api/source'
 import { quickApply, listRevisions, rollbackRevision } from '@/api/config'
 import { useProxyStore } from '@/stores/proxy'
@@ -137,7 +134,6 @@ const proxyStore = useProxyStore()
 const sources = ref<any[]>([])
 const loading = ref(false)
 const busy = ref(false)       // locked while add pipeline runs
-const applying = ref(false)
 const fetchingId = ref<number | null>(null)
 const newUrl = ref('')
 const newName = ref('')
@@ -262,19 +258,6 @@ const fetchAndApply = async (src: Source) => {
     ElMessage.error(e.message || 'Failed')
   } finally {
     fetchingId.value = null
-  }
-}
-
-// ── Apply All ─────────────────────────────────────────────────────────────────
-const applyAll = async () => {
-  applying.value = true
-  try {
-    const res = await runApplyPipeline()
-    ElMessage.success(`Applied — ${res.data?.sources?.length ?? 0} profile(s)`)
-  } catch (e: any) {
-    ElMessage.error(e.message || 'Apply failed')
-  } finally {
-    applying.value = false
   }
 }
 
