@@ -130,6 +130,51 @@
       </el-col>
     </el-row>
 
+    <!-- GeoIP Database (MMDB) -->
+    <el-card style="margin-top: 20px">
+      <template #header>
+        <div class="card-header">
+          <span>GeoIP Database (MMDB)</span>
+          <el-tag :type="mmdb?.exists ? 'success' : 'danger'" size="small">
+            {{ mmdb?.exists ? 'Installed' : 'Not Found' }}
+          </el-tag>
+        </div>
+      </template>
+
+      <el-skeleton v-if="mmdbLoading" :rows="2" animated />
+      <template v-else-if="mmdb">
+        <el-descriptions :column="1" border>
+          <el-descriptions-item label="Path">
+            <el-text class="mono" size="small">{{ mmdb.path }}</el-text>
+          </el-descriptions-item>
+          <el-descriptions-item label="Size">
+            {{ mmdb.exists ? formatBytes(mmdb.size) : '—' }}
+          </el-descriptions-item>
+        </el-descriptions>
+
+        <div style="margin-top:14px;display:flex;gap:10px;align-items:center">
+          <el-input
+            v-model="mmdbUrl"
+            placeholder="Custom URL (leave empty for MetaCubeX default)"
+            clearable
+            style="flex:1"
+            :disabled="mmdbDownloading"
+          />
+          <el-button
+            type="primary"
+            :loading="mmdbDownloading"
+            @click="downloadMMDB"
+          >
+            <el-icon><Download /></el-icon>
+            {{ mmdb.exists ? 'Re-download' : 'Download' }}
+          </el-button>
+        </div>
+        <el-text v-if="mmdbDownloading" type="info" size="small" style="margin-top:8px;display:block">
+          Downloading... this may take a few minutes.
+        </el-text>
+      </template>
+    </el-card>
+
     <!-- Install / Update -->
     <el-card style="margin-top: 20px">
       <template #header>
@@ -245,6 +290,7 @@ import {
   type MihomoInstallStatus,
   type InstallProgress
 } from '@/api/proxy'
+import request from '@/api/request'
 
 const status = ref<MihomoInstallStatus | null>(null)
 const statusLoading = ref(false)
@@ -257,8 +303,48 @@ const versionsLoading = ref(false)
 const versionsLoaded = ref(false)
 
 const job = ref<InstallProgress | null>(null)
-const initializing = ref(true)   // true until first progress check completes
+const initializing = ref(true)
 let pollTimer: ReturnType<typeof setInterval> | null = null
+
+// MMDB
+const mmdb = ref<{ exists: boolean; path: string; size: number } | null>(null)
+const mmdbLoading = ref(false)
+const mmdbDownloading = ref(false)
+const mmdbUrl = ref('')
+
+const loadMMDB = async () => {
+  mmdbLoading.value = true
+  try {
+    mmdb.value = await request({ url: '/proxy/mihomo/mmdb', method: 'GET' }) as any
+  } finally {
+    mmdbLoading.value = false
+  }
+}
+
+const downloadMMDB = async () => {
+  mmdbDownloading.value = true
+  try {
+    await request({
+      url: '/proxy/mihomo/mmdb/download',
+      method: 'POST',
+      data: { url: mmdbUrl.value || '' },
+      timeout: 15 * 60 * 1000
+    })
+    ElMessage.success('MMDB downloaded successfully')
+    await loadMMDB()
+  } catch (e: any) {
+    ElMessage.error(e.message || 'Download failed')
+  } finally {
+    mmdbDownloading.value = false
+  }
+}
+
+const formatBytes = (bytes: number) => {
+  if (!bytes) return '0 B'
+  if (bytes < 1024) return `${bytes} B`
+  if (bytes < 1048576) return `${(bytes / 1024).toFixed(1)} KB`
+  return `${(bytes / 1048576).toFixed(1)} MB`
+}
 
 // ── computed ──────────────────────────────────────────────────────────────────
 
@@ -324,6 +410,7 @@ const stageTagType = computed(() => {
 
 const refresh = async () => {
   await loadStatus()
+  loadMMDB()
   if (versionsLoaded.value) await loadVersions()
 }
 
@@ -419,6 +506,7 @@ const install = async () => {
 
 onMounted(async () => {
   await loadStatus()
+  loadMMDB()
   // Resume progress state immediately — disables form until check completes
   const p = await getInstallProgress().catch(() => null)
   if (p) {

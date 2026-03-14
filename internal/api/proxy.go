@@ -3,8 +3,10 @@ package api
 import (
 	"context"
 	"fmt"
+	"io"
 	"net/http"
 	"os"
+	"path/filepath"
 	"strconv"
 	"time"
 
@@ -295,6 +297,92 @@ func (h *Handler) MihomoVersionList(c *gin.Context) {
 		return
 	}
 	h.respondJSON(c, http.StatusOK, gin.H{"versions": versions})
+}
+
+// MihomoMMDBStatus returns GeoIP database (MMDB) status and triggers download.
+func (h *Handler) MihomoMMDBStatus(c *gin.Context) {
+	mmdbPath := filepath.Join(h.mihomoConfigDir, "Country.mmdb")
+	info, err := os.Stat(mmdbPath)
+	if err != nil {
+		h.respondJSON(c, http.StatusOK, gin.H{
+			"exists": false,
+			"path":   mmdbPath,
+			"size":   0,
+		})
+		return
+	}
+	h.respondJSON(c, http.StatusOK, gin.H{
+		"exists":   true,
+		"path":     mmdbPath,
+		"size":     info.Size(),
+		"mod_time": info.ModTime(),
+	})
+}
+
+// MihomoMMDBDownload downloads MMDB from a URL and saves it to the mihomo config dir.
+// Body: {"url": "https://..."} — optional; defaults to MetaCubeX country.mmdb
+func (h *Handler) MihomoMMDBDownload(c *gin.Context) {
+	var req struct {
+		URL string `json:"url"`
+	}
+	_ = c.ShouldBindJSON(&req)
+	if req.URL == "" {
+		req.URL = "https://github.com/MetaCubeX/meta-rules-dat/releases/download/latest/country.mmdb"
+	}
+
+	mmdbPath := filepath.Join(h.mihomoConfigDir, "Country.mmdb")
+	if err := os.MkdirAll(filepath.Dir(mmdbPath), 0755); err != nil {
+		h.respondError(c, http.StatusInternalServerError, "failed to create dir: "+err.Error())
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(c.Request.Context(), 10*time.Minute)
+	defer cancel()
+
+	httpReq, err := http.NewRequestWithContext(ctx, http.MethodGet, req.URL, nil)
+	if err != nil {
+		h.respondError(c, http.StatusBadRequest, "invalid URL: "+err.Error())
+		return
+	}
+	httpReq.Header.Set("User-Agent", "clash.meta")
+
+	client := &http.Client{Timeout: 10 * time.Minute}
+	resp, err := client.Do(httpReq)
+	if err != nil {
+		h.respondError(c, http.StatusBadGateway, "download failed: "+err.Error())
+		return
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		h.respondError(c, http.StatusBadGateway, fmt.Sprintf("download returned %d", resp.StatusCode))
+		return
+	}
+
+	tmp := mmdbPath + ".tmp"
+	f, err := os.Create(tmp)
+	if err != nil {
+		h.respondError(c, http.StatusInternalServerError, "failed to create file: "+err.Error())
+		return
+	}
+	written, err := io.Copy(f, resp.Body)
+	f.Close()
+	if err != nil {
+		os.Remove(tmp)
+		h.respondError(c, http.StatusInternalServerError, "write failed: "+err.Error())
+		return
+	}
+	if err := os.Rename(tmp, mmdbPath); err != nil {
+		os.Remove(tmp)
+		h.respondError(c, http.StatusInternalServerError, "install failed: "+err.Error())
+		return
+	}
+
+	h.auditLog(c, "mmdb_downloaded", "mihomo", fmt.Sprintf("MMDB downloaded %d bytes from %s", written, req.URL))
+	h.respondSuccess(c, "MMDB downloaded successfully", gin.H{
+		"path": mmdbPath,
+		"size": written,
+	})
 }
 
 // MihomoInstallStatus returns a consolidated installation status: binary existence,

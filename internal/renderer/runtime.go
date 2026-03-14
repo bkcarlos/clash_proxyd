@@ -91,6 +91,10 @@ func (r *Renderer) applyPolicy(config map[string]interface{}) {
 	}
 	config["ipv6"] = r.policyCfg.IPv6
 
+	// Disable geodata (MMDB) to avoid download dependency on first run.
+	// GEOIP rules will fall back gracefully without this database.
+	config["geodata-mode"] = false
+
 	// Ensure essential fields exist
 	if _, ok := config["proxies"]; !ok {
 		config["proxies"] = []interface{}{}

@@ -108,6 +108,8 @@ func (h *Handler) SetupRouter(authManager *auth.Manager, corsOrigins []string) *
 				proxy.GET("/mihomo/releases", h.MihomoReleases)
 				proxy.GET("/mihomo/versions", h.MihomoVersionList)
 				proxy.GET("/mihomo/install-status", h.MihomoInstallStatus)
+			proxy.GET("/mihomo/mmdb", h.MihomoMMDBStatus)
+			proxy.POST("/mihomo/mmdb/download", h.MihomoMMDBDownload)
 				proxy.POST("/mihomo/update", h.MihomoUpdate)
 			proxy.POST("/mihomo/install-job", h.StartInstallJob)
 			proxy.GET("/mihomo/install-progress", h.GetInstallProgress)
