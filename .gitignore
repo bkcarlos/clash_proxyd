@@ -24,6 +24,7 @@ vendor/
 .env
 .env.local
 config.yaml
+!release/config.yaml
 *.db
 
 # Logs

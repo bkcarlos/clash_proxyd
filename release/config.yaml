@@ -1,0 +1,57 @@
+server:
+  host: "0.0.0.0"
+  port: 8080
+  web_port: 8081
+  enable_cors: false
+  cors_origins: []
+
+database:
+  path: "data/db/proxyd.db"
+  foreign_keys: true
+
+mihomo:
+  binary_path: ""
+  config_dir: "data/mihomo"
+  api_port: 9090
+  api_secret: ""
+  log_dir: "logs"
+  auto_update_enabled: false
+  auto_update_check_on_start: false
+  release_api: "https://api.github.com/repos/MetaCubeX/mihomo/releases/latest"
+  download_dir: ""
+  target_version: ""
+
+auth:
+  jwt_secret: "22f841cb23555281a764fe3fd42ca6fef0c5a8143b1671a741ae9b19b1e87f8b"
+  session_timeout: 86400
+  max_login_attempts: 5
+  lockout_duration: 300
+
+logging:
+  level: "info"
+  output: "file"
+  file_path: "logs/proxyd.log"
+  max_size: 100
+  max_backups: 7
+  max_age: 30
+  compress: true
+
+subscription:
+  default_interval: 3600
+  timeout: 30
+  user_agent: "clash.meta"
+  max_retries: 3
+  retry_delay: 5
+
+policy:
+  mixed_port: 7890
+  allow_lan: true
+  bind_address: "*"
+  log_level: "warning"
+  mode: "rule"
+  external_controller: "127.0.0.1:9090"
+  ipv6: false
+
+scheduler:
+  enabled: true
+  workers: 3
