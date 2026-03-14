@@ -14,49 +14,21 @@
       </div>
     </div>
 
-    <el-row :gutter="20">
-      <el-col :span="12">
-        <el-card>
-          <template #header>
-            <span>Proxy Groups</span>
+    <el-card>
+      <template #header>
+        <span>Proxy Groups</span>
+      </template>
+      <el-table :data="proxyStore.groups" border stripe>
+        <el-table-column prop="name" label="Name" />
+        <el-table-column prop="type" label="Type" width="120" />
+        <el-table-column prop="now" label="Current" width="160" />
+        <el-table-column label="Actions" width="120">
+          <template #default="{ row }">
+            <el-button size="small" @click="showGroupDetail(row)">Detail</el-button>
           </template>
-          <el-table :data="proxyStore.groups" border stripe>
-            <el-table-column prop="name" label="Name" />
-            <el-table-column prop="type" label="Type" width="120" />
-            <el-table-column prop="now" label="Current" width="160" />
-            <el-table-column label="Actions" width="120">
-              <template #default="{ row }">
-                <el-button size="small" @click="showGroupDetail(row)">Detail</el-button>
-              </template>
-            </el-table-column>
-          </el-table>
-        </el-card>
-      </el-col>
-
-      <el-col :span="12">
-        <el-card>
-          <template #header>
-            <span>Traffic</span>
-          </template>
-          <div class="traffic-info">
-            <div class="traffic-item">
-              <el-icon class="traffic-icon upload"><Top /></el-icon>
-              <div>
-                <p class="traffic-label">Upload</p>
-                <p class="traffic-value">{{ formatBytes(proxyStore.traffic.up) }}</p>
-              </div>
-            </div>
-            <div class="traffic-item">
-              <el-icon class="traffic-icon download"><Bottom /></el-icon>
-              <div>
-                <p class="traffic-label">Download</p>
-                <p class="traffic-value">{{ formatBytes(proxyStore.traffic.down) }}</p>
-              </div>
-            </div>
-          </div>
-        </el-card>
-      </el-col>
-    </el-row>
+        </el-table-column>
+      </el-table>
+    </el-card>
 
     <el-dialog v-model="groupDialogVisible" :title="selectedGroup?.name" width="700px">
       <el-table :data="selectedGroup?.proxies || []" border stripe>
@@ -93,7 +65,7 @@
 import { ref, onMounted } from 'vue'
 import { useProxyStore } from '@/stores/proxy'
 import { ElMessage } from 'element-plus'
-import { Refresh, Setting, Top, Bottom } from '@element-plus/icons-vue'
+import { Refresh, Setting } from '@element-plus/icons-vue'
 
 const proxyStore = useProxyStore()
 
@@ -101,20 +73,9 @@ const groupDialogVisible = ref(false)
 const mihomoDialogVisible = ref(false)
 const selectedGroup = ref<any>(null)
 
-const formatBytes = (bytes: number): string => {
-  if (bytes === 0) return '0 B'
-  const k = 1024
-  const sizes = ['B', 'KB', 'MB', 'GB', 'TB']
-  const i = Math.floor(Math.log(bytes) / Math.log(k))
-  return `${(bytes / Math.pow(k, i)).toFixed(2)} ${sizes[i]}`
-}
-
 const refreshProxies = async () => {
   try {
-    await Promise.all([
-      proxyStore.fetchProxies(true),
-      proxyStore.fetchTraffic(true)
-    ])
+    await proxyStore.fetchProxies(true)
     ElMessage.success('Proxies refreshed')
   } catch (error: any) {
     ElMessage.error(error.message || 'Refresh failed')
@@ -167,7 +128,6 @@ const controlMihomo = async (action: 'start' | 'stop' | 'restart') => {
 
 onMounted(() => {
   proxyStore.fetchProxies(true)
-  proxyStore.fetchTraffic(true)
 })
 </script>
 
@@ -185,41 +145,6 @@ onMounted(() => {
   margin-bottom: 20px;
 }
 
-.traffic-info {
-  display: flex;
-  flex-direction: column;
-  gap: 20px;
-}
-
-.traffic-item {
-  display: flex;
-  align-items: center;
-  gap: 15px;
-}
-
-.traffic-icon {
-  font-size: 32px;
-}
-
-.traffic-icon.upload {
-  color: #67c23a;
-}
-
-.traffic-icon.download {
-  color: #409eff;
-}
-
-.traffic-label {
-  margin: 0 0 5px 0;
-  font-size: 14px;
-  color: #909399;
-}
-
-.traffic-value {
-  margin: 0;
-  font-size: 18px;
-  font-weight: 600;
-}
 
 .mihomo-controls {
   display: flex;

@@ -103,15 +103,15 @@
         <el-table-column label="时间" width="165">
           <template #default="{ row }">{{ new Date(row.created_at).toLocaleString() }}</template>
         </el-table-column>
-        <el-table-column label="Hash / 操作">
+        <el-table-column label="Hash" show-overflow-tooltip>
           <template #default="{ row }">
-            <div class="rev-action-row">
-              <span class="rev-hash">{{ row.source_hash }}</span>
-              <div class="rev-btns">
-                <el-button size="small" @click="viewRevision(row)">查看</el-button>
-                <el-button size="small" type="primary" plain @click="rollback(row)">应用</el-button>
-              </div>
-            </div>
+            <span class="rev-hash">{{ row.source_hash }}</span>
+          </template>
+        </el-table-column>
+        <el-table-column label="操作" width="120">
+          <template #default="{ row }">
+            <el-button size="small" @click="viewRevision(row)">查看</el-button>
+            <el-button size="small" type="primary" plain @click="rollback(row)">应用</el-button>
           </template>
         </el-table-column>
       </el-table>
@@ -422,27 +422,9 @@ onMounted(() => {
   align-items: center;
 }
 
-.rev-action-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-}
-
 .rev-hash {
   font-family: monospace;
   font-size: 11px;
   color: var(--cv-text-muted);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  flex: 1;
-  min-width: 0;
-}
-
-.rev-btns {
-  display: flex;
-  gap: 4px;
-  flex-shrink: 0;
 }
 </style>
