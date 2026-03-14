@@ -2,12 +2,16 @@ package store
 
 import (
 	"database/sql"
+	_ "embed"
 	"fmt"
 	"os"
 	"path/filepath"
 
 	_ "github.com/mattn/go-sqlite3"
 )
+
+//go:embed schema.sql
+var embeddedSchema string
 
 // DB holds the database connection
 type DB struct {
@@ -44,13 +48,23 @@ func NewDB(path string, foreignKeys bool) (*DB, error) {
 		return nil, fmt.Errorf("failed to ping database: %w", err)
 	}
 
-	return &DB{db}, nil
+	wrapped := &DB{db}
+
+	// Auto-initialize schema and seed defaults on every open.
+	// All DDL statements use CREATE IF NOT EXISTS and INSERT OR IGNORE,
+	// so this is safe to run against an existing database.
+	if err := wrapped.InitSchema(); err != nil {
+		return nil, fmt.Errorf("failed to initialize schema: %w", err)
+	}
+
+	return wrapped, nil
 }
 
-// InitSchema initializes the database schema
-func (db *DB) InitSchema(schemaSQL string) error {
-	if _, err := db.Exec(schemaSQL); err != nil {
-		return fmt.Errorf("failed to initialize schema: %w", err)
+// InitSchema applies the embedded schema SQL to the database.
+// Safe to call on an existing database (uses CREATE IF NOT EXISTS / INSERT OR IGNORE).
+func (db *DB) InitSchema() error {
+	if _, err := db.Exec(embeddedSchema); err != nil {
+		return fmt.Errorf("failed to apply schema: %w", err)
 	}
 	return nil
 }
