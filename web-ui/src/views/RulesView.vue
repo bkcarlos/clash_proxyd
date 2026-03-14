@@ -58,7 +58,7 @@
         :page-sizes="[50, 100, 200, 500]"
         layout="total, sizes, prev, pager, next, jumper"
         background
-        small
+        size="small"
       />
     </div>
 
