@@ -93,21 +93,25 @@
     <el-card class="revisions-card">
       <template #header>
         <div class="card-header-row">
-          <span>Config Revisions</span>
+          <span>历史配置版本</span>
           <el-button link @click="loadRevisions"><el-icon><Refresh /></el-icon></el-button>
         </div>
       </template>
       <el-table :data="revisions" size="small">
-        <el-table-column prop="version" label="Ver" width="60" />
-        <el-table-column prop="created_by" label="By" width="80" />
-        <el-table-column label="Time" width="160">
+        <el-table-column prop="version" label="版本" width="60" />
+        <el-table-column prop="created_by" label="操作人" width="90" />
+        <el-table-column label="时间" width="165">
           <template #default="{ row }">{{ new Date(row.created_at).toLocaleString() }}</template>
         </el-table-column>
-        <el-table-column prop="source_hash" label="Hash" show-overflow-tooltip />
-        <el-table-column label="" width="120">
+        <el-table-column label="Hash / 操作">
           <template #default="{ row }">
-            <el-button size="small" @click="viewRevision(row)">View</el-button>
-            <el-button size="small" @click="rollback(row)">Apply</el-button>
+            <div class="rev-action-row">
+              <span class="rev-hash">{{ row.source_hash }}</span>
+              <div class="rev-btns">
+                <el-button size="small" @click="viewRevision(row)">查看</el-button>
+                <el-button size="small" type="primary" plain @click="rollback(row)">应用</el-button>
+              </div>
+            </div>
           </template>
         </el-table-column>
       </el-table>
@@ -416,5 +420,29 @@ onMounted(() => {
   display: flex;
   justify-content: space-between;
   align-items: center;
+}
+
+.rev-action-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.rev-hash {
+  font-family: monospace;
+  font-size: 11px;
+  color: var(--cv-text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1;
+  min-width: 0;
+}
+
+.rev-btns {
+  display: flex;
+  gap: 4px;
+  flex-shrink: 0;
 }
 </style>
