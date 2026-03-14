@@ -25,18 +25,21 @@ type ApplyConfigRequest struct {
 	Path   string `json:"path,omitempty"`
 }
 
-func (h *Handler) loadSourceConfigs(sourceIDs []int) ([]types.Source, []map[string]interface{}, error) {
+func (h *Handler) loadSourceConfigs(sourceIDs []int) ([]types.Source, []map[string]interface{}, []string, error) {
 	sources := make([]types.Source, 0, len(sourceIDs))
 	configs := make([]map[string]interface{}, 0, len(sourceIDs))
 	yamlParser := parser.NewParser()
+	var skipped []string
 
 	for _, id := range sourceIDs {
 		src, err := h.sourceStore.GetByID(id)
 		if err != nil {
-			return nil, nil, fmt.Errorf("source not found: ID %d", id)
+			skipped = append(skipped, fmt.Sprintf("ID %d: not found", id))
+			continue
 		}
 		if !src.Enabled {
-			return nil, nil, fmt.Errorf("source is disabled: %s", src.Name)
+			skipped = append(skipped, fmt.Sprintf("%s: disabled", src.Name))
+			continue
 		}
 
 		var content []byte
@@ -48,21 +51,30 @@ func (h *Handler) loadSourceConfigs(sourceIDs []int) ([]types.Source, []map[stri
 			// No cache yet: fetch now and store for future use.
 			content, err = h.fetchSourceContent(src)
 			if err != nil {
-				return nil, nil, fmt.Errorf("failed to fetch source %s (no cache): %w", src.Name, err)
+				skipped = append(skipped, fmt.Sprintf("%s: fetch failed (%v)", src.Name, err))
+				continue
 			}
 			_ = h.sourceStore.UpdateContent(src.ID, content)
 		}
 
 		cfg, err := yamlParser.Parse(content)
 		if err != nil {
-			return nil, nil, fmt.Errorf("failed to parse source %s: %w", src.Name, err)
+			skipped = append(skipped, fmt.Sprintf("%s: parse failed (%v)", src.Name, err))
+			continue
 		}
 
 		sources = append(sources, *src)
 		configs = append(configs, cfg)
 	}
 
-	return sources, configs, nil
+	if len(configs) == 0 {
+		if len(skipped) > 0 {
+			return nil, nil, skipped, fmt.Errorf("all sources failed to load: %s", strings.Join(skipped, "; "))
+		}
+		return nil, nil, skipped, fmt.Errorf("no sources to load")
+	}
+
+	return sources, configs, skipped, nil
 }
 
 func (h *Handler) nextRevisionVersion() string {
@@ -141,7 +153,7 @@ func (h *Handler) QuickApply(c *gin.Context) {
 		ids[i] = s.ID
 	}
 
-	srcs, configs, err := h.loadSourceConfigs(ids)
+	srcs, configs, skipped, err := h.loadSourceConfigs(ids)
 	if err != nil {
 		h.respondError(c, http.StatusBadRequest, err.Error())
 		return
@@ -187,9 +199,10 @@ func (h *Handler) QuickApply(c *gin.Context) {
 		names[i] = s.Name
 	}
 
-	h.auditLog(c, "quick_apply", "config", fmt.Sprintf("Quick apply from sources: %v", names))
+	h.auditLog(c, "quick_apply", "config", fmt.Sprintf("Quick apply from sources: %v, skipped: %v", names, skipped))
 	h.respondSuccess(c, "Config generated and applied successfully", gin.H{
 		"sources":  names,
+		"skipped":  skipped,
 		"hash":     hash,
 		"path":     path,
 		"revision": revision.Version,
@@ -209,7 +222,7 @@ func (h *Handler) GenerateConfig(c *gin.Context) {
 		return
 	}
 
-	_, configs, err := h.loadSourceConfigs(req.SourceIDs)
+	_, configs, _, err := h.loadSourceConfigs(req.SourceIDs)
 	if err != nil {
 		h.respondError(c, http.StatusBadRequest, err.Error())
 		return
