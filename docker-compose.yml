@@ -1,0 +1,37 @@
+version: '3.8'
+
+services:
+  proxyd:
+    build: .
+    container_name: proxyd
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./data:/opt/proxyd/data
+      - ./logs:/opt/proxyd/logs
+      - ./config.yaml:/opt/proxyd/config.yaml
+    environment:
+      - GIN_MODE=release
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 5s
+
+  # Optional: Nginx reverse proxy
+  nginx:
+    image: nginx:alpine
+    container_name: proxyd-nginx
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./deployments/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+      - ./certs:/etc/nginx/certs:ro
+    depends_on:
+      - proxyd
+    restart: unless-stopped
+    profiles:
+      - with-nginx

@@ -1,0 +1,17 @@
+# Logs
+logs/*.log
+*.log
+
+# Database
+data/db/*.db
+
+# Environment
+.env
+.env.local
+config.yaml
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo

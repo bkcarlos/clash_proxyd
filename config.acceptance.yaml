@@ -1,0 +1,108 @@
+# Proxyd Configuration Example
+# Copy this file to config.yaml and modify as needed
+
+server:
+  # API server address
+  host: "0.0.0.0"
+  port: 18082
+  # Enable CORS for web UI
+  enable_cors: true
+  # CORS allowed origins
+  cors_origins:
+    - "http://localhost:5173"
+    - "http://localhost:3000"
+
+# Database configuration
+database:
+  # SQLite database path
+  path: "data/db/proxyd.db"
+  # Enable foreign keys
+  foreign_keys: true
+
+# Mihomo configuration
+mihomo:
+  # Path to mihomo binary
+  binary_path: "/usr/local/bin/mihomo"
+  # Directory for mihomo configuration files
+  config_dir: "/etc/mihomo"
+  # mihomo API port (default in clash config)
+  api_port: 9090
+  # mihomo API secret (if configured)
+  api_secret: ""
+  # Log directory
+  log_dir: "logs"
+  # Enable auto-update on startup
+  auto_update_enabled: false
+  # Check and apply update when proxyd starts
+  auto_update_check_on_start: true
+  # GitHub Releases API endpoint
+  release_api: "https://api.github.com/repos/MetaCubeX/mihomo/releases/latest"
+  # Directory for downloaded release assets
+  download_dir: "/etc/mihomo/bin"
+  # Optional fixed version tag; empty means latest
+  target_version: ""
+
+# Authentication
+auth:
+  # JWT signing secret (CHANGE IN PRODUCTION!)
+  jwt_secret: "acceptance-secret"
+  # Session timeout in seconds (24 hours)
+  session_timeout: 86400
+  # Max login attempts
+  max_login_attempts: 5
+  # Lockout duration in seconds
+  lockout_duration: 300
+
+# Logging
+logging:
+  # Log level: debug, info, warn, error
+  level: "info"
+  # Log output: stdout, file
+  output: "stdout"
+  # Log file path (if output is file)
+  file_path: "logs/proxyd.log"
+  # Max log file size in MB
+  max_size: 100
+  # Max log file backups
+  max_backups: 3
+  # Max age of log files in days
+  max_age: 7
+  # Compress rotated logs
+  compress: true
+
+# Subscription settings
+subscription:
+  # Default update interval in seconds (1 hour)
+  default_interval: 3600
+  # Request timeout in seconds
+  timeout: 30
+  # User agent for subscription requests
+  user_agent: "clash-proxyd/1.0"
+  # Max retries for failed downloads
+  max_retries: 3
+  # Retry delay in seconds
+  retry_delay: 5
+
+# Policy settings
+policy:
+  # Default port for mihomo
+  mixed_port: 7890
+  # Allow LAN connections
+  allow_lan: true
+  # Bind address
+  bind_address: "*"
+  # Log level
+  log_level: "info"
+  # Mode: rule, global, direct
+  mode: "rule"
+  # External controller
+  external_controller: "127.0.0.1:9090"
+  # Enable IPv6
+  ipv6: false
+
+# Scheduler settings
+scheduler:
+  # Enable scheduler
+  enabled: true
+  # Worker count
+  workers: 3

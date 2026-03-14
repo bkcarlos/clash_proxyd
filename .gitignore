@@ -1,0 +1,62 @@
+# Binaries
+proxyd
+*.exe
+*.dll
+*.so
+*.dylib
+*.test
+*.out
+
+# Go work files
+*.work
+
+# Dependency directories
+vendor/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Environment
+.env
+.env.local
+config.yaml
+*.db
+
+# Logs
+logs/*.log
+*.log
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Frontend
+web-ui/node_modules/
+web-ui/dist/
+web-ui/.env.local
+
+# Data
+data/db/*.db
+data/cache/*
+!data/db/.gitkeep
+
+# Runtime
+*.pid
+*.sock
+
+# Build output (binaries and runtime data)
+build/proxyd
+build/proxyd.exe
+build/mihomo
+build/mihomo.exe
+build/mihomo.bak
+build/mihomo*.gz
+build/data/
+build/logs/
+
+# Test / dev config (contains local secrets)
+config.test.yaml
