@@ -39,6 +39,86 @@
       </el-form>
     </el-card>
 
+    <!-- Terminal Proxy Config -->
+    <el-card style="margin-top: 20px">
+      <template #header>
+        <div class="card-header-row">
+          <span>Terminal Proxy Config</span>
+          <el-tag :type="proxyStatus.running ? 'success' : 'info'" size="small">
+            {{ proxyStatus.running ? `Port ${proxyStatus.port}` : 'Mihomo not running' }}
+          </el-tag>
+        </div>
+      </template>
+
+      <el-form label-width="100px">
+        <el-form-item label="Host">
+          <el-input v-model="proxyHost" style="width:200px" />
+        </el-form-item>
+        <el-form-item label="Port">
+          <el-input-number v-model="proxyPort" :min="1" :max="65535" style="width:150px" />
+        </el-form-item>
+      </el-form>
+
+      <el-tabs v-model="shellTab" class="proxy-tabs">
+        <el-tab-pane label="Linux / macOS" name="unix">
+          <div class="cmd-list">
+            <div v-for="cmd in unixCmds" :key="cmd.label" class="cmd-row">
+              <span class="cmd-label">{{ cmd.label }}</span>
+              <code class="cmd-code">{{ cmd.value }}</code>
+              <el-button size="small" link @click="copy(cmd.value)">
+                <el-icon><CopyDocument /></el-icon>
+              </el-button>
+            </div>
+            <div class="cmd-row all">
+              <span class="cmd-label">All</span>
+              <code class="cmd-code" style="flex:1;white-space:normal">{{ unixAll }}</code>
+              <el-button size="small" link @click="copy(unixAll)">
+                <el-icon><CopyDocument /></el-icon>
+              </el-button>
+            </div>
+          </div>
+        </el-tab-pane>
+
+        <el-tab-pane label="Windows CMD" name="cmd">
+          <div class="cmd-list">
+            <div v-for="cmd in winCmds" :key="cmd.label" class="cmd-row">
+              <span class="cmd-label">{{ cmd.label }}</span>
+              <code class="cmd-code">{{ cmd.value }}</code>
+              <el-button size="small" link @click="copy(cmd.value)">
+                <el-icon><CopyDocument /></el-icon>
+              </el-button>
+            </div>
+            <div class="cmd-row all">
+              <span class="cmd-label">All</span>
+              <code class="cmd-code" style="flex:1;white-space:normal">{{ winAll }}</code>
+              <el-button size="small" link @click="copy(winAll)">
+                <el-icon><CopyDocument /></el-icon>
+              </el-button>
+            </div>
+          </div>
+        </el-tab-pane>
+
+        <el-tab-pane label="PowerShell" name="ps">
+          <div class="cmd-list">
+            <div v-for="cmd in psCmds" :key="cmd.label" class="cmd-row">
+              <span class="cmd-label">{{ cmd.label }}</span>
+              <code class="cmd-code">{{ cmd.value }}</code>
+              <el-button size="small" link @click="copy(cmd.value)">
+                <el-icon><CopyDocument /></el-icon>
+              </el-button>
+            </div>
+            <div class="cmd-row all">
+              <span class="cmd-label">All</span>
+              <code class="cmd-code" style="flex:1;white-space:normal">{{ psAll }}</code>
+              <el-button size="small" link @click="copy(psAll)">
+                <el-icon><CopyDocument /></el-icon>
+              </el-button>
+            </div>
+          </div>
+        </el-tab-pane>
+      </el-tabs>
+    </el-card>
+
     <el-card style="margin-top: 20px">
       <template #header>
         <span>Change Password</span>
@@ -66,10 +146,12 @@
 </template>
 
 <script setup lang="ts">
-import { reactive, onMounted } from 'vue'
+import { reactive, ref, computed, onMounted } from 'vue'
 import { useSystemStore } from '@/stores/system'
 import * as authApi from '@/api/auth'
 import { ElMessage } from 'element-plus'
+import { CopyDocument } from '@element-plus/icons-vue'
+import request from '@/api/request'
 
 const systemStore = useSystemStore()
 
@@ -122,9 +204,58 @@ const changePassword = async () => {
   }
 }
 
+// ── Terminal proxy config ────────────────────────────────────────────────
+const proxyHost = ref('127.0.0.1')
+const proxyPort = ref(7891)
+const shellTab = ref('unix')
+const proxyStatus = ref({ running: false, port: 7891 })
+
+const addr = computed(() => `${proxyHost.value}:${proxyPort.value}`)
+const httpAddr = computed(() => `http://${addr.value}`)
+const socksAddr = computed(() => `socks5://${addr.value}`)
+
+const unixCmds = computed(() => [
+  { label: 'http_proxy',  value: `export http_proxy=${httpAddr.value}` },
+  { label: 'https_proxy', value: `export https_proxy=${httpAddr.value}` },
+  { label: 'all_proxy',   value: `export all_proxy=${socksAddr.value}` },
+  { label: 'no_proxy',    value: `export no_proxy=localhost,127.0.0.1` },
+])
+const unixAll = computed(() => unixCmds.value.map(c => c.value).join('\n'))
+
+const winCmds = computed(() => [
+  { label: 'http_proxy',  value: `set http_proxy=${httpAddr.value}` },
+  { label: 'https_proxy', value: `set https_proxy=${httpAddr.value}` },
+  { label: 'all_proxy',   value: `set all_proxy=${socksAddr.value}` },
+  { label: 'no_proxy',    value: `set no_proxy=localhost,127.0.0.1` },
+])
+const winAll = computed(() => winCmds.value.map(c => c.value).join(' & '))
+
+const psCmds = computed(() => [
+  { label: 'http_proxy',  value: `$env:http_proxy="${httpAddr.value}"` },
+  { label: 'https_proxy', value: `$env:https_proxy="${httpAddr.value}"` },
+  { label: 'all_proxy',   value: `$env:all_proxy="${socksAddr.value}"` },
+  { label: 'no_proxy',    value: `$env:no_proxy="localhost,127.0.0.1"` },
+])
+const psAll = computed(() => psCmds.value.map(c => c.value).join('; '))
+
+const copy = async (text: string) => {
+  try {
+    await navigator.clipboard.writeText(text)
+    ElMessage.success('Copied!')
+  } catch {
+    ElMessage.error('Copy failed')
+  }
+}
+
 onMounted(async () => {
   await systemStore.fetchSettings()
   Object.assign(settings, systemStore.settings)
+  // Try to read current mihomo port from install-status
+  try {
+    const s: any = await request({ url: '/proxy/mihomo/install-status', method: 'GET' })
+    proxyStatus.value.running = s.is_running
+    // Port comes from config policy; fall back to 7891
+  } catch { /* non-critical */ }
 })
 </script>
 
@@ -133,5 +264,48 @@ onMounted(async () => {
   margin: 0 0 20px 0;
   font-size: 24px;
   font-weight: 600;
+}
+
+.card-header-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.proxy-tabs { margin-top: 4px; }
+
+.cmd-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.cmd-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 10px;
+  background: var(--cv-surface2, #1e2235);
+  border-radius: 6px;
+}
+
+.cmd-row.all {
+  align-items: flex-start;
+  padding: 8px 10px;
+}
+
+.cmd-label {
+  font-size: 12px;
+  color: var(--cv-text-muted, #64748b);
+  width: 90px;
+  flex-shrink: 0;
+}
+
+.cmd-code {
+  flex: 1;
+  font-family: 'Menlo', 'Monaco', 'Consolas', monospace;
+  font-size: 12px;
+  color: #22d3ee;
+  word-break: break-all;
 }
 </style>
