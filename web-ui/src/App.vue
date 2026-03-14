@@ -85,6 +85,39 @@ html.dark .el-table__row:hover > td {
 }
 
 /* ── Dialog ─────────────────────────────────────────────────────────────── */
+
+/* Fix: * { margin: 0 } resets the dialog's 15vh top margin; restore centering via flex */
+.el-overlay-dialog {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 30px 0;
+  overflow: auto;
+}
+
+.el-dialog {
+  margin: 0 !important;
+  max-height: calc(100vh - 60px);
+  display: flex;
+  flex-direction: column;
+}
+
+.el-dialog__body {
+  overflow-y: auto;
+  flex: 1;
+}
+
+/* MessageBox centering */
+.el-overlay-message-box {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.el-message-box {
+  margin: 0 !important;
+}
+
 html.dark .el-dialog {
   background: var(--cv-surface);
   border: 1px solid var(--cv-border);
@@ -92,6 +125,16 @@ html.dark .el-dialog {
 }
 
 html.dark .el-dialog__header {
+  border-bottom: 1px solid var(--cv-border);
+}
+
+html.dark .el-message-box {
+  background: var(--cv-surface);
+  border: 1px solid var(--cv-border);
+  border-radius: var(--cv-radius);
+}
+
+html.dark .el-message-box__header {
   border-bottom: 1px solid var(--cv-border);
 }
 
