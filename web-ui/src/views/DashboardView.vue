@@ -159,7 +159,7 @@
             </div>
           </template>
           <div class="speed-chart-wrap">
-            <svg :width="chartW" :height="chartH" class="speed-chart">
+            <svg width="100%" :viewBox="`0 0 ${chartW} ${chartH}`" preserveAspectRatio="none" class="speed-chart">
               <!-- Up line -->
               <polyline
                 v-if="upPoints.length > 1"
@@ -259,9 +259,10 @@ const upFill = computed(() => toFill(upPoints.value))
 const downFill = computed(() => toFill(downPoints.value))
 
 const formatRate = (bps: number) => {
-  if (bps < 1024) return `${bps}B/s`
-  if (bps < 1048576) return `${(bps / 1024).toFixed(1)}KB/s`
-  return `${(bps / 1048576).toFixed(1)}MB/s`
+  if (!bps || !isFinite(bps) || bps < 0) return '0 B/s'
+  if (bps < 1024) return `${bps} B/s`
+  if (bps < 1048576) return `${(bps / 1024).toFixed(1)} KB/s`
+  return `${(bps / 1048576).toFixed(1)} MB/s`
 }
 
 const tickTraffic = () => {
@@ -573,10 +574,10 @@ onUnmounted(() => {
 
 .speed-chart {
   display: block;
+  width: 100%;
+  height: 120px;
   background: var(--cv-surface2);
   border-radius: var(--cv-radius-sm);
-  width: 100%;
-  height: 100px;
 }
 
 .chart-labels {
