@@ -2,6 +2,7 @@ package api
 
 import (
 	"fmt"
+	"net"
 	"net/http"
 	"runtime"
 	"strings"
@@ -283,4 +284,37 @@ func lastAlertSummary(auditStore interface {
 	}
 
 	return "", "", time.Time{}, false
+}
+
+// GetNetworkInterfaces returns local IPv4 addresses for proxy host selection.
+func (h *Handler) GetNetworkInterfaces(c *gin.Context) {
+	addrs := []string{"127.0.0.1"}
+
+	ifaces, err := net.Interfaces()
+	if err == nil {
+		for _, iface := range ifaces {
+			if iface.Flags&net.FlagUp == 0 || iface.Flags&net.FlagLoopback != 0 {
+				continue
+			}
+			ifAddrs, err := iface.Addrs()
+			if err != nil {
+				continue
+			}
+			for _, a := range ifAddrs {
+				var ip net.IP
+				switch v := a.(type) {
+				case *net.IPNet:
+					ip = v.IP
+				case *net.IPAddr:
+					ip = v.IP
+				}
+				if ip == nil || ip.IsLoopback() || ip.To4() == nil {
+					continue
+				}
+				addrs = append(addrs, ip.String())
+			}
+		}
+	}
+
+	h.respondJSON(c, http.StatusOK, gin.H{"addresses": addrs})
 }

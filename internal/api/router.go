@@ -52,6 +52,7 @@ func (h *Handler) SetupRouter(authManager *auth.Manager, corsOrigins []string) *
 				system.PUT("/settings/batch", h.UpdateSettingsBatch)
 				system.GET("/audit-logs", h.GetAuditLogs)
 			system.GET("/logs", h.GetLogs)
+			system.GET("/network-interfaces", h.GetNetworkInterfaces)
 			system.GET("/logs/download", h.DownloadLog)
 			}
 

@@ -52,7 +52,20 @@
 
       <el-form label-width="100px">
         <el-form-item label="Host">
-          <el-input v-model="proxyHost" style="width:200px" />
+          <el-select
+            v-model="proxyHost"
+            filterable
+            allow-create
+            style="width:220px"
+            placeholder="Select or enter IP"
+          >
+            <el-option
+              v-for="ip in hostOptions"
+              :key="ip.value"
+              :label="ip.label"
+              :value="ip.value"
+            />
+          </el-select>
         </el-form-item>
         <el-form-item label="Port">
           <el-input-number v-model="proxyPort" :min="1" :max="65535" style="width:150px" />
@@ -209,6 +222,7 @@ const proxyHost = ref('127.0.0.1')
 const proxyPort = ref(7891)
 const shellTab = ref('unix')
 const proxyStatus = ref({ running: false, port: 7891 })
+const hostOptions = ref([{ value: '127.0.0.1', label: '127.0.0.1 (localhost)' }])
 
 const addr = computed(() => `${proxyHost.value}:${proxyPort.value}`)
 const httpAddr = computed(() => `http://${addr.value}`)
@@ -254,7 +268,15 @@ onMounted(async () => {
   try {
     const s: any = await request({ url: '/proxy/mihomo/install-status', method: 'GET' })
     proxyStatus.value.running = s.is_running
-    // Port comes from config policy; fall back to 7891
+  } catch { /* non-critical */ }
+  // Load local IP addresses for the host selector
+  try {
+    const net: any = await request({ url: '/system/network-interfaces', method: 'GET' })
+    const ips: string[] = net.addresses ?? []
+    hostOptions.value = ips.map(ip => ({
+      value: ip,
+      label: ip === '127.0.0.1' ? `${ip} (localhost)` : ip
+    }))
   } catch { /* non-critical */ }
 })
 </script>
