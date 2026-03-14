@@ -29,6 +29,7 @@ type Config struct {
 type ServerConfig struct {
 	Host        string   `yaml:"host"`
 	Port        int      `yaml:"port"`
+	WebPort     int      `yaml:"web_port"`     // optional dedicated port for the embedded web UI (0 = share API port)
 	EnableCors  bool     `yaml:"enable_cors"`
 	CorsOrigins []string `yaml:"cors_origins"`
 }

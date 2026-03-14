@@ -92,8 +92,72 @@
       </div>
     </el-card>
 
+    <!-- Network Speed: full-width row -->
+    <el-card class="speed-card" style="margin-bottom: 20px;">
+      <template #header>
+        <div class="card-header">
+          <span>Network Speed <span class="chart-window-label">2 min</span></span>
+          <div style="display:flex;gap:16px;font-size:13px">
+            <span style="color:#5865f2">↑ {{ formatRate(upRate) }}</span>
+            <span style="color:#22d3ee">↓ {{ formatRate(downRate) }}</span>
+          </div>
+        </div>
+      </template>
+      <div class="speed-chart-wrap">
+        <svg width="100%" :viewBox="`0 0 ${chartW} ${chartH}`" preserveAspectRatio="none" class="speed-chart">
+          <!-- Horizontal grid lines -->
+          <line v-for="n in 3" :key="n"
+            x1="0" :y1="(chartH / 4) * n"
+            :x2="chartW" :y2="(chartH / 4) * n"
+            stroke="rgba(255,255,255,0.06)" stroke-width="1"
+          />
+          <!-- Vertical grid lines at 25% intervals -->
+          <line v-for="n in 3" :key="`v${n}`"
+            :x1="(chartW / 4) * n" y1="0"
+            :x2="(chartW / 4) * n" :y2="chartH"
+            stroke="rgba(255,255,255,0.04)" stroke-width="1"
+          />
+          <!-- Up fill -->
+          <polygon :points="upFill" fill="rgba(88,101,242,0.2)" />
+          <!-- Down fill -->
+          <polygon :points="downFill" fill="rgba(34,211,238,0.12)" />
+          <!-- Up line -->
+          <polyline
+            :points="upPoints"
+            fill="none"
+            stroke="#5865f2"
+            stroke-width="2"
+            stroke-linejoin="round"
+            stroke-linecap="round"
+          />
+          <!-- Down line -->
+          <polyline
+            :points="downPoints"
+            fill="none"
+            stroke="#22d3ee"
+            stroke-width="2"
+            stroke-linejoin="round"
+            stroke-linecap="round"
+          />
+          <!-- Max label -->
+          <text v-if="chartMax > 0"
+            x="4" y="12"
+            font-size="9" fill="rgba(255,255,255,0.3)"
+          >{{ formatRate(chartMax) }}</text>
+        </svg>
+        <!-- Time axis: real clock times, scroll with data -->
+        <div class="chart-time-axis">
+          <span v-for="label in timeAxisLabels" :key="label">{{ label }}</span>
+        </div>
+        <div class="chart-labels">
+          <span style="color:#5865f2">↑ {{ formatBytes(proxyStore.traffic.up) }} total</span>
+          <span style="color:#22d3ee">↓ {{ formatBytes(proxyStore.traffic.down) }} total</span>
+        </div>
+      </div>
+    </el-card>
+
     <el-row :gutter="20" class="content-row">
-      <el-col :span="12">
+      <el-col :span="24">
         <el-card class="info-card">
           <template #header>
             <div class="card-header">
@@ -147,60 +211,6 @@
         </el-card>
       </el-col>
 
-      <el-col :span="12">
-        <el-card class="info-card">
-          <template #header>
-            <div class="card-header">
-              <span>Network Speed</span>
-              <div style="display:flex;gap:16px;font-size:13px">
-                <span style="color:#5865f2">↑ {{ formatRate(upRate) }}</span>
-                <span style="color:#22d3ee">↓ {{ formatRate(downRate) }}</span>
-              </div>
-            </div>
-          </template>
-          <div class="speed-chart-wrap">
-            <svg width="100%" :viewBox="`0 0 ${chartW} ${chartH}`" preserveAspectRatio="none" class="speed-chart">
-              <!-- Grid lines -->
-              <line v-for="n in 3" :key="n"
-                x1="0" :y1="(chartH / 4) * n"
-                :x2="chartW" :y2="(chartH / 4) * n"
-                stroke="rgba(255,255,255,0.06)" stroke-width="1"
-              />
-              <!-- Up fill -->
-              <polygon :points="upFill" fill="rgba(88,101,242,0.2)" />
-              <!-- Down fill -->
-              <polygon :points="downFill" fill="rgba(34,211,238,0.12)" />
-              <!-- Up line -->
-              <polyline
-                :points="upPoints"
-                fill="none"
-                stroke="#5865f2"
-                stroke-width="2"
-                stroke-linejoin="round"
-                stroke-linecap="round"
-              />
-              <!-- Down line -->
-              <polyline
-                :points="downPoints"
-                fill="none"
-                stroke="#22d3ee"
-                stroke-width="2"
-                stroke-linejoin="round"
-                stroke-linecap="round"
-              />
-              <!-- Max label -->
-              <text v-if="chartMax > 0"
-                x="4" y="12"
-                font-size="9" fill="rgba(255,255,255,0.3)"
-              >{{ formatRate(chartMax) }}</text>
-            </svg>
-            <div class="chart-labels">
-              <span style="color:#5865f2">↑ {{ formatBytes(proxyStore.traffic.up) }} total</span>
-              <span style="color:#22d3ee">↓ {{ formatBytes(proxyStore.traffic.down) }} total</span>
-            </div>
-          </div>
-        </el-card>
-      </el-col>
     </el-row>
   </div>
 </template>
@@ -224,12 +234,26 @@ const controlling = ref<string>('')
 const checkingUpdate = ref(false)
 
 // ── Speed chart ────────────────────────────────────────────────────────────
-const HISTORY = 60
+const HISTORY = 120          // 2 minutes at 1 sample/s
 const chartW = 340
 const chartH = 100
 const upHistory = ref<number[]>(Array(HISTORY).fill(0))
 const downHistory = ref<number[]>(Array(HISTORY).fill(0))
 let prevUp = 0, prevDown = 0, prevTs = 0
+const nowTs = ref(Date.now())
+
+// 5 evenly-spaced time labels across the 2-minute window
+const TIME_AXIS_OFFSETS = [120, 90, 60, 30, 0] // seconds before "now"
+const fmtTime = (ts: number) => {
+  const d = new Date(ts)
+  const hh = String(d.getHours()).padStart(2, '0')
+  const mm = String(d.getMinutes()).padStart(2, '0')
+  const ss = String(d.getSeconds()).padStart(2, '0')
+  return `${hh}:${mm}:${ss}`
+}
+const timeAxisLabels = computed(() =>
+  TIME_AXIS_OFFSETS.map(s => fmtTime(nowTs.value - s * 1000))
+)
 
 const upRate = computed(() => upHistory.value[upHistory.value.length - 1] ?? 0)
 const downRate = computed(() => downHistory.value[downHistory.value.length - 1] ?? 0)
@@ -267,6 +291,7 @@ const formatRate = (bps: number) => {
 
 const tickTraffic = () => {
   const now = Date.now()
+  nowTs.value = now
   const { up, down } = proxyStore.traffic
   if (prevTs > 0) {
     const dt = (now - prevTs) / 1000
@@ -490,9 +515,7 @@ onUnmounted(() => {
   margin-bottom: 20px;
 }
 
-.info-card {
-  height: 340px;
-}
+.info-card {}
 
 .auto-update-card {
   margin-top: 16px;
@@ -580,9 +603,27 @@ onUnmounted(() => {
   border-radius: var(--cv-radius-sm);
 }
 
+.chart-time-axis {
+  display: flex;
+  justify-content: space-between;
+  font-size: 10px;
+  color: rgba(144, 147, 153, 0.7);
+  margin-top: -4px;
+}
+
 .chart-labels {
   display: flex;
   justify-content: space-between;
   font-size: 12px;
+}
+
+.chart-window-label {
+  font-size: 11px;
+  font-weight: 400;
+  color: #909399;
+  margin-left: 6px;
+  background: var(--el-fill-color-light, #f5f7fa);
+  padding: 1px 6px;
+  border-radius: 8px;
 }
 </style>

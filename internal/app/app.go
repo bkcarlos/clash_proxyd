@@ -3,14 +3,17 @@ package app
 import (
 	"context"
 	"fmt"
+	"io/fs"
 	"net/http"
 	"os"
 	"os/signal"
 	"path/filepath"
+	"strings"
 	"syscall"
 	"time"
 
 	"github.com/clash-proxyd/proxyd/internal/api"
+	"github.com/clash-proxyd/proxyd/internal/assets"
 	"github.com/clash-proxyd/proxyd/internal/auth"
 	"github.com/clash-proxyd/proxyd/internal/core"
 	"github.com/clash-proxyd/proxyd/internal/health"
@@ -33,11 +36,20 @@ type App struct {
 	authManager   *auth.Manager
 	sourceStore   *store.SourceStore
 	auditStore    *store.AuditStore
+	runtimeStore  *store.RuntimeStore
 	mihomoManager *core.Manager
 	updater       *core.Updater
 	scheduler     *scheduler.Scheduler
 	healthChecker *health.Checker
 	server        *http.Server
+	webServer     *http.Server // non-nil when web UI runs on a dedicated port
+	webFS         fs.FS        // non-nil when the embedded web UI should be served
+}
+
+// EnableWebUI registers the embedded filesystem to be served at "/".
+// Must be called before Start().
+func (a *App) EnableWebUI(webFS fs.FS) {
+	a.webFS = webFS
 }
 
 // New creates a new application
@@ -58,6 +70,18 @@ func New(cfg *config.Config) (*App, error) {
 	logx.Info("Starting proxyd",
 		zap.String("version", "1.0.0"),
 		zap.String("log_level", cfg.Logging.Level))
+
+	// Extract bundled assets (mihomo binary + Country.mmdb) if absent on disk.
+	if assets.Bundled() {
+		mmdbPath := filepath.Join(cfg.Mihomo.ConfigDir, "Country.mmdb")
+		if err := assets.Extract(cfg.Mihomo.BinaryPath, mmdbPath); err != nil {
+			logx.Warn("Failed to extract bundled assets", zap.Error(err))
+		} else {
+			logx.Info("Bundled assets ready",
+				zap.String("binary", cfg.Mihomo.BinaryPath),
+				zap.String("mmdb", mmdbPath))
+		}
+	}
 
 	// Initialize database
 	db, err := store.NewDB(cfg.Database.Path, cfg.Database.ForeignKeys)
@@ -146,6 +170,7 @@ func New(cfg *config.Config) (*App, error) {
 		authManager:   authManager,
 		sourceStore:   sourceStore,
 		auditStore:    auditStore,
+		runtimeStore:  runtimeStore,
 		mihomoManager: mihomoManager,
 		updater:       updater,
 		scheduler:     sched,
@@ -179,6 +204,9 @@ func (a *App) Start() error {
 	healthStatus := a.healthChecker.Check()
 	logx.Info("Initial health check", zap.String("status", healthStatus.Status), zap.Any("services", healthStatus.Services))
 
+	// Auto-restore mihomo if it was running before proxyd stopped
+	a.autoStartMihomo()
+
 	// Start scheduler if enabled
 	if a.cfg.Scheduler.Enabled {
 		a.scheduler.Start()
@@ -203,10 +231,17 @@ func (a *App) Start() error {
 		logx.Info("Scheduler started")
 	}
 
-	// Setup router
-	router := a.handler.SetupRouter(a.authManager, a.cfg.Server.CorsOrigins)
+	// When a dedicated web_port is configured, the API server carries no web
+	// routes and the web UI gets its own lightweight server.
+	webFSForAPI := a.webFS
+	if a.webFS != nil && a.cfg.Server.WebPort > 0 {
+		webFSForAPI = nil // API server: no SPA routes
+	}
 
-	// Create HTTP server
+	// Setup API router
+	router := a.handler.SetupRouter(a.authManager, a.cfg.Server.CorsOrigins, webFSForAPI)
+
+	// Create API HTTP server
 	a.server = &http.Server{
 		Addr:           fmt.Sprintf("%s:%d", a.cfg.Server.Host, a.cfg.Server.Port),
 		Handler:        router,
@@ -215,14 +250,30 @@ func (a *App) Start() error {
 		MaxHeaderBytes: 1 << 20,
 	}
 
-	// Start server in goroutine
+	// Start API server in goroutine
 	go func() {
-		logx.Info("Server starting",
-			zap.String("address", a.server.Addr))
+		logx.Info("API server starting", zap.String("address", a.server.Addr))
 		if err := a.server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			logx.Fatal("Server failed", zap.Error(err))
+			logx.Fatal("API server failed", zap.Error(err))
 		}
 	}()
+
+	// Start dedicated web UI server when web_port is configured
+	if a.webFS != nil && a.cfg.Server.WebPort > 0 {
+		a.webServer = &http.Server{
+			Addr:           fmt.Sprintf("%s:%d", a.cfg.Server.Host, a.cfg.Server.WebPort),
+			Handler:        spaHandler(a.webFS),
+			ReadTimeout:    30 * time.Second,
+			WriteTimeout:   30 * time.Second,
+			MaxHeaderBytes: 1 << 20,
+		}
+		go func() {
+			logx.Info("Web UI server starting", zap.String("address", a.webServer.Addr))
+			if err := a.webServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+				logx.Fatal("Web UI server failed", zap.Error(err))
+			}
+		}()
+	}
 
 	logx.Info("Application started successfully")
 	return nil
@@ -257,6 +308,26 @@ func migrateSourcesTable(db *store.DB) error {
 		}
 	}
 	return nil
+}
+
+// autoStartMihomo restores mihomo if the last recorded runtime status was "running".
+func (a *App) autoStartMihomo() {
+	if a.runtimeStore == nil {
+		return
+	}
+	runtime, err := a.runtimeStore.Get()
+	if err != nil || runtime == nil {
+		return
+	}
+	if runtime.Status != "running" || runtime.ConfigPath == "" {
+		return
+	}
+	logx.Info("Auto-restoring mihomo from previous session", zap.String("config", runtime.ConfigPath))
+	if err := a.mihomoManager.Start(runtime.ConfigPath); err != nil {
+		logx.Error("Failed to auto-restore mihomo", zap.Error(err))
+	} else {
+		logx.Info("Mihomo auto-restored successfully")
+	}
 }
 
 func (a *App) checkAndApplyMihomoUpdate() {
@@ -394,12 +465,18 @@ func (a *App) Stop() error {
 	// Stop scheduler
 	a.scheduler.Stop()
 
-	// Shutdown HTTP server with timeout
+	// Shutdown HTTP servers with timeout
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
 	if err := a.server.Shutdown(ctx); err != nil {
 		return fmt.Errorf("server shutdown failed: %w", err)
+	}
+
+	if a.webServer != nil {
+		if err := a.webServer.Shutdown(ctx); err != nil {
+			return fmt.Errorf("web server shutdown failed: %w", err)
+		}
 	}
 
 	// Close database
@@ -435,4 +512,26 @@ func (a *App) Run() error {
 	}
 	a.Wait()
 	return nil
+}
+
+// spaHandler returns a bare net/http handler that serves a Vue SPA from fsys.
+// Known files are served directly; all other paths fall back to index.html
+// so that Vue Router's HTML5 history mode works correctly.
+func spaHandler(fsys fs.FS) http.Handler {
+	fileServer := http.FileServer(http.FS(fsys))
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		path := r.URL.Path
+		if path != "/" {
+			// Strip leading slash before opening from the embedded FS.
+			f, err := fsys.Open(strings.TrimPrefix(path, "/"))
+			if err == nil {
+				f.Close()
+				fileServer.ServeHTTP(w, r)
+				return
+			}
+		}
+		// Unknown path → hand off to index.html for SPA routing.
+		r.URL.Path = "/"
+		fileServer.ServeHTTP(w, r)
+	})
 }

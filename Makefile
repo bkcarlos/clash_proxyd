@@ -14,6 +14,7 @@ GOCLEAN=$(GOCMD) clean
 GOTEST=$(GOCMD) test
 GOGET=$(GOCMD) get
 GOMOD=$(GOCMD) mod
+NPM=npm
 
 # API parameters (for mihomo control via proxyd API)
 API_BASE?=http://127.0.0.1:8080/api/v1
@@ -22,18 +23,46 @@ ADMIN_PASSWORD?=$$2a$$10$$YourBCryptHashHere
 
 all: build
 
-## build: Build both backend and frontend
-build: build-backend build-frontend
+## build: Build frontend then backend (without embedded web UI)
+build: build-frontend build-backend
 
-## build-backend: Build Go backend
+## build-all: Build frontend + embed it into the binary (-tags webui)
+build-all: build-frontend embed-frontend build-backend-web
+
+## build-backend: Build Go backend (no embedded web UI)
 build-backend:
 	mkdir -p $(BUILD_DIR)
 	CGO_ENABLED=1 $(GOBUILD) -o $(BUILD_DIR)/$(BINARY_NAME) ./$(CMD_DIR)
+
+## build-backend-web: Build Go backend with embedded web UI (-tags webui)
+build-backend-web:
+	mkdir -p $(BUILD_DIR)
+	CGO_ENABLED=1 $(GOBUILD) -tags webui -o $(BUILD_DIR)/$(BINARY_NAME) ./$(CMD_DIR)
+
+## copy-assets: Copy mihomo binary and Country.mmdb into internal/assets/ for go:embed
+## Requires: build/mihomo and build/data/mihomo/Country.mmdb to exist
+copy-assets:
+	@test -f $(BUILD_DIR)/mihomo || (echo "ERROR: $(BUILD_DIR)/mihomo not found. Build or download mihomo first." && exit 1)
+	@test -f $(BUILD_DIR)/data/mihomo/Country.mmdb || (echo "ERROR: $(BUILD_DIR)/data/mihomo/Country.mmdb not found." && exit 1)
+	cp $(BUILD_DIR)/mihomo internal/assets/mihomo
+	cp $(BUILD_DIR)/data/mihomo/Country.mmdb internal/assets/Country.mmdb
+	@echo "Assets copied to internal/assets/"
+
+## build-bundle: Build fully self-contained binary (web UI + mihomo + MMDB embedded)
+build-bundle: build-frontend embed-frontend copy-assets
+	mkdir -p $(BUILD_DIR)
+	CGO_ENABLED=1 $(GOBUILD) -tags webui,bundle -o $(BUILD_DIR)/$(BINARY_NAME) ./$(CMD_DIR)
+	@echo "Bundle binary built: $(BUILD_DIR)/$(BINARY_NAME)"
 
 ## build-frontend: Build Vue frontend
 build-frontend:
 	cd $(WEB_UI_DIR) && $(NPM) install
 	cd $(WEB_UI_DIR) && $(NPM) run build
+
+## embed-frontend: Copy Vue dist into internal/webui/dist for go:embed
+embed-frontend:
+	rm -rf internal/webui/dist
+	cp -r $(WEB_UI_DIR)/dist internal/webui/dist
 
 ## install: Install proxyd to system
 install: build
@@ -55,6 +84,8 @@ clean:
 	rm -rf $(BUILD_DIR)
 	rm -rf $(WEB_UI_DIR)/dist
 	rm -rf $(WEB_UI_DIR)/node_modules
+	rm -rf internal/webui/dist
+	rm -f internal/assets/mihomo internal/assets/Country.mmdb
 
 ## test: Run tests
 test:

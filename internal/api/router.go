@@ -1,12 +1,17 @@
 package api
 
 import (
+	"io/fs"
+	"net/http"
+	"strings"
+
 	"github.com/clash-proxyd/proxyd/internal/auth"
 	"github.com/gin-gonic/gin"
 )
 
-// SetupRouter sets up the API router
-func (h *Handler) SetupRouter(authManager *auth.Manager, corsOrigins []string) *gin.Engine {
+// SetupRouter sets up the API router.
+// If webFS is non-nil the embedded Vue SPA is served for all non-API paths.
+func (h *Handler) SetupRouter(authManager *auth.Manager, corsOrigins []string, webFS fs.FS) *gin.Engine {
 	router := gin.New()
 
 	// Middleware
@@ -118,6 +123,24 @@ func (h *Handler) SetupRouter(authManager *auth.Manager, corsOrigins []string) *
 				proxy.POST("/mihomo/:action", h.MihomoControl)
 			}
 		}
+	}
+
+	// Serve embedded Vue SPA for all non-API paths when webFS is provided.
+	if webFS != nil {
+		fileServer := http.FileServer(http.FS(webFS))
+		router.NoRoute(func(c *gin.Context) {
+			urlPath := strings.TrimPrefix(c.Request.URL.Path, "/")
+			// Try to open the exact file from the embedded FS.
+			f, err := webFS.Open(urlPath)
+			if err == nil {
+				f.Close()
+				fileServer.ServeHTTP(c.Writer, c.Request)
+				return
+			}
+			// Fall back to index.html so Vue Router can handle the path.
+			c.Request.URL.Path = "/"
+			fileServer.ServeHTTP(c.Writer, c.Request)
+		})
 	}
 
 	return router

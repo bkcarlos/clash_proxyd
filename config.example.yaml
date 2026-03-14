@@ -5,6 +5,10 @@ server:
   # API server address
   host: "0.0.0.0"
   port: 8080
+  # Dedicated port for the embedded web UI (requires -web flag and webui build tag).
+  # 0 (default) = serve web UI on the same port as the API.
+  # Set a non-zero value (e.g. 8081) to run the web UI on a separate port.
+  web_port: 0
   # Enable CORS for web UI
   enable_cors: true
   # CORS allowed origins

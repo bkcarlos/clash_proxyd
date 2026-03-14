@@ -1,0 +1,4 @@
+# Binary assets copied here by `make copy-assets` for go:embed bundle builds.
+# Do NOT commit these large files to version control.
+mihomo
+Country.mmdb
