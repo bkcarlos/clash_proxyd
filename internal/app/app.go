@@ -229,7 +229,15 @@ func (a *App) Start() error {
 }
 
 // migrateSourcesTable adds content-caching columns when upgrading from an older schema.
+// Skips gracefully when the sources table doesn't exist yet (e.g. during -init-db).
 func migrateSourcesTable(db *store.DB) error {
+	// Check if the sources table exists at all; if not, skip — init-db will create it.
+	var tableName string
+	err := db.QueryRow("SELECT name FROM sqlite_master WHERE type='table' AND name='sources'").Scan(&tableName)
+	if err != nil || tableName == "" {
+		return nil // table doesn't exist yet; init-db will create it with all columns
+	}
+
 	migrations := []struct {
 		col string
 		ddl string
@@ -239,11 +247,9 @@ func migrateSourcesTable(db *store.DB) error {
 		{"last_fetch", "ALTER TABLE sources ADD COLUMN last_fetch DATETIME"},
 	}
 	for _, m := range migrations {
-		// Check if column exists by attempting a SELECT.
 		var dummy any
-		err := db.QueryRow("SELECT " + m.col + " FROM sources LIMIT 1").Scan(&dummy)
-		if err != nil && err.Error() != "sql: no rows in result set" {
-			// Column missing — add it.
+		checkErr := db.QueryRow("SELECT " + m.col + " FROM sources LIMIT 1").Scan(&dummy)
+		if checkErr != nil && checkErr.Error() != "sql: no rows in result set" {
 			if _, execErr := db.Exec(m.ddl); execErr != nil {
 				return fmt.Errorf("add column %s: %w", m.col, execErr)
 			}

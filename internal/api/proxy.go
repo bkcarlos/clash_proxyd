@@ -162,6 +162,10 @@ func (h *Handler) GetConnections(c *gin.Context) {
 		h.mihomoUnavailable(c, err)
 		return
 	}
+	// Ensure connections field is always an array, never null
+	if conns["connections"] == nil {
+		conns["connections"] = []interface{}{}
+	}
 	h.respondJSON(c, http.StatusOK, conns)
 }
 
@@ -191,7 +195,9 @@ func (h *Handler) GetRules(c *gin.Context) {
 		h.mihomoUnavailable(c, err)
 		return
 	}
-
+	if rules["rules"] == nil {
+		rules["rules"] = []interface{}{}
+	}
 	h.respondJSON(c, http.StatusOK, rules)
 }
 
