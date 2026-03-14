@@ -60,6 +60,11 @@ func (p *Process) Start() error {
 		p.cmd.Stderr = os.Stderr
 	}
 
+	// Ensure mihomo is killed when proxyd exits (even on SIGKILL / crash).
+	p.cmd.SysProcAttr = &syscall.SysProcAttr{
+		Pdeathsig: syscall.SIGTERM,
+	}
+
 	// Start process
 	if err := p.cmd.Start(); err != nil {
 		return fmt.Errorf("failed to start mihomo: %w", err)
