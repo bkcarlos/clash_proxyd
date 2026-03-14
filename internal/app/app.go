@@ -348,23 +348,24 @@ rules:
 	logx.Info("Bootstrap mihomo config written", zap.String("path", configPath))
 }
 
-// autoStartMihomo restores mihomo if the last recorded runtime status was "running".
+// autoStartMihomo starts mihomo on every proxyd startup.
+// Config path priority:
+//  1. Last known config path recorded in the runtime table
+//  2. Default runtime.yaml in the mihomo config dir (bootstrap config)
 func (a *App) autoStartMihomo() {
-	if a.runtimeStore == nil {
-		return
+	configPath := filepath.Join(a.cfg.Mihomo.ConfigDir, "runtime.yaml")
+
+	if a.runtimeStore != nil {
+		if rt, err := a.runtimeStore.Get(); err == nil && rt != nil && rt.ConfigPath != "" {
+			configPath = rt.ConfigPath
+		}
 	}
-	runtime, err := a.runtimeStore.Get()
-	if err != nil || runtime == nil {
-		return
-	}
-	if runtime.Status != "running" || runtime.ConfigPath == "" {
-		return
-	}
-	logx.Info("Auto-restoring mihomo from previous session", zap.String("config", runtime.ConfigPath))
-	if err := a.mihomoManager.Start(runtime.ConfigPath); err != nil {
-		logx.Error("Failed to auto-restore mihomo", zap.Error(err))
+
+	logx.Info("Auto-starting mihomo", zap.String("config", configPath))
+	if err := a.mihomoManager.Start(configPath); err != nil {
+		logx.Error("Failed to auto-start mihomo", zap.Error(err))
 	} else {
-		logx.Info("Mihomo auto-restored successfully")
+		logx.Info("Mihomo started successfully")
 	}
 }
 
