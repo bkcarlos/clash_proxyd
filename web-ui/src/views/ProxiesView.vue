@@ -6,7 +6,7 @@
       <div class="toolbar-left">
         <el-input
           v-model="proxyFilter"
-          placeholder="Filter nodes..."
+          :placeholder="t('proxies.filterPlaceholder')"
           size="small"
           clearable
           style="width:160px"
@@ -15,14 +15,14 @@
         </el-input>
         <el-input
           v-model="testUrl"
-          placeholder="Test URL"
+          :placeholder="t('proxies.testUrlPlaceholder')"
           size="small"
           clearable
           style="width:270px"
         />
       </div>
       <div class="toolbar-right">
-        <el-tooltip content="Sort by delay" placement="bottom">
+        <el-tooltip :content="t('proxies.sortByDelay')" placement="bottom">
           <el-button
             size="small"
             :type="sortByDelay ? 'primary' : ''"
@@ -32,7 +32,7 @@
           </el-button>
         </el-tooltip>
         <el-button size="small" type="success" :loading="testingAll" @click="testAll">
-          Test All
+          {{ t('proxies.testAll') }}
         </el-button>
         <el-button size="small" :loading="refreshing" @click="refreshProxies">
           <el-icon><Refresh /></el-icon>
@@ -46,7 +46,7 @@
       <!-- Left: group list -->
       <div class="group-panel">
         <div class="group-panel-header">
-          Groups
+          {{ t('proxies.groups') }}
           <span class="group-count">{{ proxyStore.groups.length }}</span>
         </div>
         <div
@@ -63,7 +63,7 @@
           </div>
         </div>
         <div v-if="proxyStore.groups.length === 0" class="group-empty">
-          <el-empty :image-size="48" description="No groups" />
+          <el-empty :image-size="48" :description="t('proxies.noGroups')" />
         </div>
       </div>
 
@@ -131,12 +131,12 @@
           </div>
 
           <div v-if="displayedProxies.length === 0" class="node-no-result">
-            <el-empty :image-size="60" description="No matching nodes" />
+            <el-empty :image-size="60" :description="t('proxies.noMatchingNodes')" />
           </div>
         </template>
 
         <div v-else class="node-placeholder">
-          <el-empty :image-size="80" description="Select a group" />
+          <el-empty :image-size="80" :description="t('proxies.selectGroup')" />
         </div>
       </div>
 
@@ -149,7 +149,9 @@ import { ref, computed, onMounted, watch } from 'vue'
 import { useProxyStore } from '@/stores/proxy'
 import { ElMessage } from 'element-plus'
 import { Refresh, Search, Sort, Loading, Connection, Select } from '@element-plus/icons-vue'
+import { useI18n } from 'vue-i18n'
 
+const { t } = useI18n()
 const proxyStore = useProxyStore()
 
 const selectedGroup   = ref<any>(null)
@@ -251,7 +253,7 @@ const delayClass = (node: any): string => {
 const delayLabel = (node: any): string => {
   if (testing.value[node.name]) return '…'
   if (node.delay === undefined)  return '—'
-  if (node.delay === 0)          return node.error ? '✕' : 'Timeout'
+  if (node.delay === 0)          return node.error ? '✕' : t('proxies.timeout')
   return `${node.delay} ms`
 }
 
@@ -265,7 +267,7 @@ const testOne = async (name: string, silent = false) => {
     if (result.error || result.delay === 0) {
       const raw = result.error || ''
       const match = raw.match(/status (\d+): (.+)/)
-      const msg = match ? `HTTP ${match[1]}: ${match[2]}` : (raw || 'Timeout')
+      const msg = match ? `HTTP ${match[1]}: ${match[2]}` : (raw || t('proxies.timeout'))
       delays.value[name] = { delay: 0, error: msg }
       if (!silent) ElMessage.warning(`${name}: ${msg}`)
     } else {
@@ -289,7 +291,7 @@ const testAll = async () => {
     await Promise.allSettled(names.slice(i, i + BATCH).map(n => testOne(n, true)))
   }
   const ok = names.filter(n => (delays.value[n]?.delay ?? 0) > 0).length
-  ElMessage.success(`${names.length} tested — ${ok} reachable, ${names.length - ok} timeout`)
+  ElMessage.success(t('proxies.tested', { total: names.length, ok, failed: names.length - ok }))
   sortByDelay.value = true
   testingAll.value = false
 }
@@ -301,9 +303,9 @@ const handleNodeClick = async (node: any) => {
     selectedGroup.value.now = node.name
     const sg = proxyStore.groups.find((g: any) => g.name === selectedGroup.value.name)
     if (sg) sg.now = node.name
-    ElMessage.success(`Switched to ${node.name}`)
+    ElMessage.success(t('proxies.switchedTo', { name: node.name }))
   } catch (e: any) {
-    ElMessage.error(e?.message || 'Switch failed')
+    ElMessage.error(e?.message || t('proxies.switchFailed'))
   }
 }
 
@@ -312,9 +314,9 @@ const refreshProxies = async () => {
   try {
     await proxyStore.fetchProxies(true)
     initDelaysFromHistory()
-    ElMessage.success('Refreshed')
+    ElMessage.success(t('proxies.refreshed'))
   } catch (e: any) {
-    ElMessage.error(e?.message || 'Refresh failed')
+    ElMessage.error(e?.message || t('proxies.refreshFailed'))
   } finally {
     refreshing.value = false
   }

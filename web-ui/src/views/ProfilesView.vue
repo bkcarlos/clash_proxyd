@@ -5,7 +5,7 @@
     <div class="add-bar">
       <el-input
         v-model="newUrl"
-        placeholder="Paste subscription URL here..."
+        :placeholder="t('profiles.urlPlaceholder')"
         clearable
         style="flex:1"
         :disabled="busy"
@@ -13,9 +13,9 @@
       >
         <template #prefix><el-icon><Link /></el-icon></template>
       </el-input>
-      <el-input v-model="newName" placeholder="Name (optional)" style="width:180px" :disabled="busy" />
+      <el-input v-model="newName" :placeholder="t('profiles.namePlaceholder')" style="width:180px" :disabled="busy" />
       <el-button type="primary" :loading="busy" @click="addProfile">
-        <el-icon><Plus /></el-icon>Add
+        <el-icon><Plus /></el-icon>{{ t('profiles.addBtn') }}
       </el-button>
     </div>
 
@@ -42,7 +42,7 @@
         <!-- Active badge -->
         <div v-if="activeProfileId === src.id" class="active-badge">
           <el-icon><Select /></el-icon>
-          <span>Active</span>
+          <span>{{ t('profiles.active') }}</span>
         </div>
 
         <!-- Card header: name + type -->
@@ -70,7 +70,7 @@
           <span v-if="src.content_size" class="meta-item">
             <el-icon><Files /></el-icon>{{ formatSize(src.content_size) }}
           </span>
-          <el-tag v-if="!src.last_fetch" type="warning" size="small">No cache</el-tag>
+          <el-tag v-if="!src.last_fetch" type="warning" size="small">{{ t('profiles.noCache') }}</el-tag>
         </div>
 
         <!-- Progress bar while fetching -->
@@ -86,16 +86,16 @@
 
         <!-- Actions footer -->
         <div class="card-footer" @click.stop>
-          <el-tooltip content="Enable / Disable">
+          <el-tooltip :content="t('profiles.enableDisable')">
             <el-switch v-model="src.enabled" size="small" @change="toggleEnabled(src)" />
           </el-tooltip>
           <div class="footer-right">
-            <el-tooltip content="Refresh & apply">
+            <el-tooltip :content="t('profiles.refreshApply')">
               <el-button link :loading="fetchingId === src.id" :disabled="busy" @click="fetchAndApply(src)">
                 <el-icon><Refresh /></el-icon>
               </el-button>
             </el-tooltip>
-            <el-tooltip content="Delete">
+            <el-tooltip :content="t('common.delete')">
               <el-button link type="danger" :disabled="busy" @click="deleteProfile(src.id)">
                 <el-icon><Delete /></el-icon>
               </el-button>
@@ -106,7 +106,7 @@
 
       <el-empty
         v-if="sources.length === 0 && !loading"
-        description="No profiles yet. Paste a subscription URL above."
+        :description="t('profiles.noProfiles')"
         class="grid-empty"
       />
     </div>
@@ -115,26 +115,26 @@
     <el-card class="revisions-card">
       <template #header>
         <div class="card-header-row">
-          <span>历史配置版本</span>
+          <span>{{ t('profiles.revisions') }}</span>
           <el-button link @click="loadRevisions"><el-icon><Refresh /></el-icon></el-button>
         </div>
       </template>
       <el-table :data="revisions" size="small">
-        <el-table-column prop="version" label="版本" width="60" />
-        <el-table-column prop="created_by" label="操作人" width="90" />
-        <el-table-column label="时间" width="165">
+        <el-table-column prop="version" :label="t('profiles.revVersion')" width="60" />
+        <el-table-column prop="created_by" :label="t('profiles.revOperator')" width="90" />
+        <el-table-column :label="t('profiles.revTime')" width="165">
           <template #default="{ row }">{{ new Date(row.created_at).toLocaleString() }}</template>
         </el-table-column>
-        <el-table-column label="Hash" show-overflow-tooltip>
+        <el-table-column :label="t('profiles.revHash')" show-overflow-tooltip>
           <template #default="{ row }">
             <span class="rev-hash">{{ row.source_hash }}</span>
           </template>
         </el-table-column>
-        <el-table-column label="操作" width="140" class-name="op-col">
+        <el-table-column :label="t('profiles.revActions')" width="140" class-name="op-col">
           <template #default="{ row }">
             <div class="op-btns">
-              <el-button size="small" @click="viewRevision(row)">查看</el-button>
-              <el-button size="small" type="primary" plain @click="rollback(row)">应用</el-button>
+              <el-button size="small" @click="viewRevision(row)">{{ t('common.view') }}</el-button>
+              <el-button size="small" type="primary" plain @click="rollback(row)">{{ t('common.apply') }}</el-button>
             </div>
           </template>
         </el-table-column>
@@ -159,7 +159,9 @@ import * as sourceApi from '@/api/source'
 import { quickApply, listRevisions, rollbackRevision } from '@/api/config'
 import { useProxyStore } from '@/stores/proxy'
 import type { Source } from '@/api/source'
+import { useI18n } from 'vue-i18n'
 
+const { t } = useI18n()
 const proxyStore = useProxyStore()
 
 const sources = ref<any[]>([])
@@ -245,10 +247,10 @@ const runApplyPipeline = async () => {
 // ── Add profile ───────────────────────────────────────────────────────────────
 const addProfile = async () => {
   const url = newUrl.value.trim()
-  if (!url) { ElMessage.warning('Please enter a URL'); return }
+  if (!url) { ElMessage.warning(t('profiles.enterUrl')); return }
 
   busy.value = true
-  initSteps(['Creating source', 'Fetching subscription', 'Applying config'])
+  initSteps([t('profiles.stepCreate'), t('profiles.stepFetch'), t('profiles.stepApply')])
 
   try {
     const src = await sourceApi.createSource({
@@ -271,10 +273,10 @@ const addProfile = async () => {
     markActive(src.id)
     newUrl.value = ''
     newName.value = ''
-    ElMessage.success('Profile added and applied')
+    ElMessage.success(t('profiles.addSuccess'))
   } catch (e: any) {
     advanceStep(e.message || 'Failed')
-    ElMessage.error(e.message || 'Failed to add profile')
+    ElMessage.error(e.message || t('profiles.addFailed'))
   } finally {
     busy.value = false
     steps.value = []
@@ -290,9 +292,9 @@ const fetchAndApply = async (src: Source) => {
     await loadSources()
     await runApplyPipeline()
     markActive(src.id)
-    ElMessage.success(`${src.name} updated and applied`)
+    ElMessage.success(t('profiles.updateApplied', { name: src.name }))
   } catch (e: any) {
-    ElMessage.error(e.message || 'Failed')
+    ElMessage.error(e.message || t('profiles.updateFailed'))
   } finally {
     fetchingId.value = null
   }
@@ -310,14 +312,14 @@ const toggleEnabled = async (src: any) => {
 
 const deleteProfile = async (id: number) => {
   try {
-    await ElMessageBox.confirm('Delete this profile?', 'Confirm', { type: 'warning' })
+    await ElMessageBox.confirm(t('profiles.deleteConfirm'), t('common.confirm'), { type: 'warning' })
   } catch {
     return
   }
   await sourceApi.deleteSource(id)
   if (activeProfileId.value === id) markActive(null)
   await loadSources()
-  ElMessage.success('Deleted')
+  ElMessage.success(t('profiles.deleted'))
 }
 
 const viewRevision = (rev: any) => {
@@ -327,14 +329,14 @@ const viewRevision = (rev: any) => {
 
 const rollback = async (rev: any) => {
   try {
-    await ElMessageBox.confirm(`Apply revision ${rev.version}?`, 'Confirm', { type: 'warning' })
+    await ElMessageBox.confirm(t('profiles.applyRevision', { version: rev.version }), t('common.confirm'), { type: 'warning' })
   } catch {
     return
   }
   await rollbackRevision(rev.id)
   markActive(null)
   await proxyStore.fetchProxies(true)
-  ElMessage.success('Applied')
+  ElMessage.success(t('profiles.applied'))
   await loadRevisions()
 }
 

@@ -1,26 +1,26 @@
 <template>
   <div class="settings-view">
-    <h1>Settings</h1>
+    <h1>{{ t('settings.title') }}</h1>
 
     <el-card>
       <template #header>
-        <span>System Settings</span>
+        <span>{{ t('settings.systemSettings') }}</span>
       </template>
 
       <el-form label-width="200px">
-        <el-form-item label="Mihomo Binary Path">
+        <el-form-item :label="t('settings.mihomoPath')">
           <el-input v-model="settings.mihomo_path" />
         </el-form-item>
 
-        <el-form-item label="Mihomo Config Directory">
+        <el-form-item :label="t('settings.mihomoConfigDir')">
           <el-input v-model="settings.mihomo_config_dir" />
         </el-form-item>
 
-        <el-form-item label="API Port">
+        <el-form-item :label="t('settings.apiPort')">
           <el-input-number v-model="settings.listen_port" :min="1024" :max="65535" />
         </el-form-item>
 
-        <el-form-item label="Log Level">
+        <el-form-item :label="t('settings.logLevel')">
           <el-select v-model="settings.log_level">
             <el-option label="Debug" value="debug" />
             <el-option label="Info" value="info" />
@@ -29,12 +29,12 @@
           </el-select>
         </el-form-item>
 
-        <el-form-item label="Session Timeout (seconds)">
+        <el-form-item :label="t('settings.sessionTimeout')">
           <el-input-number v-model="settings.session_timeout" :min="300" :max="86400" />
         </el-form-item>
 
         <el-form-item>
-          <el-button type="primary" @click="saveSettings">Save Settings</el-button>
+          <el-button type="primary" @click="saveSettings">{{ t('settings.saveBtn') }}</el-button>
         </el-form-item>
       </el-form>
     </el-card>
@@ -43,21 +43,21 @@
     <el-card style="margin-top: 20px">
       <template #header>
         <div class="card-header-row">
-          <span>Terminal Proxy Config</span>
+          <span>{{ t('settings.terminalProxy') }}</span>
           <el-tag :type="proxyStatus.running ? 'success' : 'info'" size="small">
-            {{ proxyStatus.running ? `Running · ${proxyHost}:${proxyPort}` : 'Mihomo not running' }}
+            {{ proxyStatus.running ? t('settings.mihomoRunning', { host: proxyHost, port: proxyPort }) : t('settings.mihomoNotRunning') }}
           </el-tag>
         </div>
       </template>
 
       <el-form label-width="100px">
-        <el-form-item label="Host">
+        <el-form-item :label="t('settings.host')">
           <el-select
             v-model="proxyHost"
             filterable
             allow-create
             style="width:220px"
-            placeholder="Select or enter IP"
+            :placeholder="t('settings.hostPlaceholder')"
           >
             <el-option
               v-for="ip in hostOptions"
@@ -67,13 +67,13 @@
             />
           </el-select>
         </el-form-item>
-        <el-form-item label="Port">
+        <el-form-item :label="t('settings.port')">
           <el-input-number v-model="proxyPort" :min="1" :max="65535" style="width:150px" />
         </el-form-item>
       </el-form>
 
       <el-tabs v-model="shellTab" class="proxy-tabs">
-        <el-tab-pane label="Linux / macOS" name="unix">
+        <el-tab-pane :label="t('settings.localLinux')" name="unix">
           <div class="cmd-list">
             <div v-for="cmd in unixCmds" :key="cmd.label" class="cmd-row">
               <span class="cmd-label">{{ cmd.label }}</span>
@@ -83,7 +83,7 @@
               </el-button>
             </div>
             <div class="cmd-row all">
-              <span class="cmd-label">All</span>
+              <span class="cmd-label">{{ t('settings.all') }}</span>
               <code class="cmd-code" style="flex:1;white-space:normal">{{ unixAll }}</code>
               <el-button size="small" link @click="copy(unixAll)">
                 <el-icon><CopyDocument /></el-icon>
@@ -92,7 +92,7 @@
           </div>
         </el-tab-pane>
 
-        <el-tab-pane label="Windows CMD" name="cmd">
+        <el-tab-pane :label="t('settings.windowsCmd')" name="cmd">
           <div class="cmd-list">
             <div v-for="cmd in winCmds" :key="cmd.label" class="cmd-row">
               <span class="cmd-label">{{ cmd.label }}</span>
@@ -102,7 +102,7 @@
               </el-button>
             </div>
             <div class="cmd-row all">
-              <span class="cmd-label">All</span>
+              <span class="cmd-label">{{ t('settings.all') }}</span>
               <code class="cmd-code" style="flex:1;white-space:normal">{{ winAll }}</code>
               <el-button size="small" link @click="copy(winAll)">
                 <el-icon><CopyDocument /></el-icon>
@@ -111,7 +111,7 @@
           </div>
         </el-tab-pane>
 
-        <el-tab-pane label="PowerShell" name="ps">
+        <el-tab-pane :label="t('settings.powershell')" name="ps">
           <div class="cmd-list">
             <div v-for="cmd in psCmds" :key="cmd.label" class="cmd-row">
               <span class="cmd-label">{{ cmd.label }}</span>
@@ -121,7 +121,7 @@
               </el-button>
             </div>
             <div class="cmd-row all">
-              <span class="cmd-label">All</span>
+              <span class="cmd-label">{{ t('settings.all') }}</span>
               <code class="cmd-code" style="flex:1;white-space:normal">{{ psAll }}</code>
               <el-button size="small" link @click="copy(psAll)">
                 <el-icon><CopyDocument /></el-icon>
@@ -134,24 +134,24 @@
 
     <el-card style="margin-top: 20px">
       <template #header>
-        <span>Change Password</span>
+        <span>{{ t('settings.changePassword') }}</span>
       </template>
 
       <el-form :model="passwordForm" label-width="150px">
-        <el-form-item label="Current Password">
+        <el-form-item :label="t('settings.currentPassword')">
           <el-input v-model="passwordForm.old_password" type="password" show-password />
         </el-form-item>
 
-        <el-form-item label="New Password">
+        <el-form-item :label="t('settings.newPassword')">
           <el-input v-model="passwordForm.new_password" type="password" show-password />
         </el-form-item>
 
-        <el-form-item label="Confirm Password">
+        <el-form-item :label="t('settings.confirmPassword')">
           <el-input v-model="passwordForm.confirm_password" type="password" show-password />
         </el-form-item>
 
         <el-form-item>
-          <el-button type="primary" @click="changePassword">Change Password</el-button>
+          <el-button type="primary" @click="changePassword">{{ t('settings.changePasswordBtn') }}</el-button>
         </el-form-item>
       </el-form>
     </el-card>
@@ -165,7 +165,9 @@ import * as authApi from '@/api/auth'
 import { ElMessage } from 'element-plus'
 import { CopyDocument } from '@element-plus/icons-vue'
 import request from '@/api/request'
+import { useI18n } from 'vue-i18n'
 
+const { t } = useI18n()
 const systemStore = useSystemStore()
 
 const settings = reactive({
@@ -187,33 +189,33 @@ const saveSettings = async () => {
     await systemStore.updateSettingsBatch(
       Object.fromEntries(Object.entries(settings).map(([k, v]) => [k, String(v)]))
     )
-    ElMessage.success('Settings saved successfully')
+    ElMessage.success(t('settings.saveSuccess'))
   } catch (error: any) {
-    ElMessage.error(error.message || 'Save failed')
+    ElMessage.error(error.message || t('settings.saveFailed'))
   }
 }
 
 const changePassword = async () => {
   if (passwordForm.new_password !== passwordForm.confirm_password) {
-    ElMessage.error('Passwords do not match')
+    ElMessage.error(t('settings.passwordMismatch'))
     return
   }
 
   if (passwordForm.new_password.length < 6) {
-    ElMessage.error('Password must be at least 6 characters')
+    ElMessage.error(t('settings.passwordTooShort'))
     return
   }
 
   try {
     await authApi.updatePassword(passwordForm.old_password, passwordForm.new_password)
-    ElMessage.success('Password changed successfully')
+    ElMessage.success(t('settings.passwordChanged'))
     Object.assign(passwordForm, {
       old_password: '',
       new_password: '',
       confirm_password: ''
     })
   } catch (error: any) {
-    ElMessage.error(error.message || 'Password change failed')
+    ElMessage.error(error.message || t('settings.passwordChangeFailed'))
   }
 }
 
@@ -256,7 +258,7 @@ const copy = (text: string) => {
   // Prefer clipboard API, fall back to execCommand for non-HTTPS / non-localhost
   if (navigator.clipboard?.writeText) {
     navigator.clipboard.writeText(text)
-      .then(() => ElMessage.success('Copied!'))
+      .then(() => ElMessage.success(t('common.copied')))
       .catch(() => copyFallback(text))
   } else {
     copyFallback(text)
@@ -272,7 +274,7 @@ const copyFallback = (text: string) => {
   el.select()
   const ok = document.execCommand('copy')
   document.body.removeChild(el)
-  ok ? ElMessage.success('Copied!') : ElMessage.error('Copy failed')
+  ok ? ElMessage.success(t('common.copied')) : ElMessage.error(t('common.copyFailed'))
 }
 
 onMounted(async () => {

@@ -1,10 +1,10 @@
 <template>
   <div class="mihomo-view">
     <div class="page-header">
-      <h1>Mihomo Management</h1>
+      <h1>{{ t('mihomo.title') }}</h1>
       <el-button :loading="statusLoading || versionsLoading" @click="refresh">
         <el-icon><Refresh /></el-icon>
-        Refresh
+        {{ t('common.refresh') }}
       </el-button>
     </div>
 
@@ -12,21 +12,21 @@
     <el-alert
       v-if="status && !status.installed && !statusLoading"
       type="warning"
-      title="Mihomo not installed"
+      :title="t('mihomo.notInstalled')"
       :closable="false"
       show-icon
       style="margin-bottom: 16px"
     >
       <template #default>
-        <p style="margin: 4px 0 0">Mihomo binary was not found at <code>{{ status.binary_path }}</code>. To get started:</p>
+        <p style="margin: 4px 0 0">{{ t('mihomo.notInstalledDesc') }} <code>{{ status.binary_path }}</code>. {{ t('common.loading') }}</p>
         <ol style="margin: 8px 0 0; padding-left: 20px; line-height: 1.8">
-          <li>Select a version (or leave blank for latest) in the <strong>Install / Update</strong> panel below.</li>
-          <li>Click <strong>Install Mihomo</strong> — the binary will be downloaded automatically.</li>
-          <li>Once installed, use <strong>Config → Generate → Apply</strong> to create a runtime config.</li>
-          <li>Then click <strong>Start</strong> above to launch the proxy.</li>
+          <li>{{ t('mihomo.setupStep1') }}</li>
+          <li>{{ t('mihomo.setupStep2') }}</li>
+          <li>{{ t('mihomo.setupStep3') }}</li>
+          <li>{{ t('mihomo.setupStep4') }}</li>
         </ol>
         <p style="margin: 8px 0 0; color: #909399; font-size: 12px">
-          Binary path is configured in your <code>config.yaml</code> under <code>mihomo.binary_path</code>.
+          {{ t('mihomo.setupBinaryPath') }}
         </p>
       </template>
     </el-alert>
@@ -37,9 +37,9 @@
         <el-card>
           <template #header>
             <div class="card-header">
-              <span>Installation Status</span>
+              <span>{{ t('mihomo.installStatus') }}</span>
               <el-tag v-if="status" :type="status.installed ? 'success' : 'danger'" size="small">
-                {{ status.installed ? 'Installed' : 'Not Installed' }}
+                {{ status.installed ? t('mihomo.installed') : t('mihomo.notInstalledTag') }}
               </el-tag>
             </div>
           </template>
@@ -48,23 +48,23 @@
 
           <template v-else-if="status">
             <el-descriptions :column="1" border>
-              <el-descriptions-item label="Binary Path">
+              <el-descriptions-item :label="t('mihomo.binaryPath')">
                 <el-text class="mono" size="small">{{ status.binary_path || '—' }}</el-text>
               </el-descriptions-item>
-              <el-descriptions-item label="Current Version">
+              <el-descriptions-item :label="t('mihomo.currentVersion')">
                 <el-tag v-if="status.current_version" type="info">{{ status.current_version }}</el-tag>
-                <el-text v-else type="info">Not detected</el-text>
+                <el-text v-else type="info">{{ t('mihomo.notDetected') }}</el-text>
               </el-descriptions-item>
-              <el-descriptions-item label="Latest Version">
+              <el-descriptions-item :label="t('mihomo.latestVersion')">
                 <el-tag v-if="status.latest_version" :type="status.needs_update ? 'warning' : 'success'">
                   {{ status.latest_version }}
                 </el-tag>
-                <el-text v-else type="info">Unknown</el-text>
+                <el-text v-else type="info">{{ t('mihomo.unknownVersion') }}</el-text>
               </el-descriptions-item>
-              <el-descriptions-item label="Update Available">
-                <el-tag v-if="status.needs_update" type="warning">Yes</el-tag>
-                <el-tag v-else-if="status.installed" type="success">Up to date</el-tag>
-                <el-tag v-else type="danger">Not installed</el-tag>
+              <el-descriptions-item :label="t('mihomo.updateAvailable')">
+                <el-tag v-if="status.needs_update" type="warning">{{ t('mihomo.updateYes') }}</el-tag>
+                <el-tag v-else-if="status.installed" type="success">{{ t('mihomo.upToDate') }}</el-tag>
+                <el-tag v-else type="danger">{{ t('mihomo.notInstalledTag') }}</el-tag>
               </el-descriptions-item>
             </el-descriptions>
           </template>
@@ -75,9 +75,9 @@
         <el-card>
           <template #header>
             <div class="card-header">
-              <span>Process Status</span>
+              <span>{{ t('mihomo.processStatus') }}</span>
               <el-tag v-if="status" :type="status.is_running ? 'success' : 'info'" size="small">
-                {{ status.is_running ? 'Running' : 'Stopped' }}
+                {{ status.is_running ? t('common.running') : t('common.stopped') }}
               </el-tag>
             </div>
           </template>
@@ -86,12 +86,12 @@
 
           <template v-else-if="status">
             <el-descriptions :column="1" border>
-              <el-descriptions-item label="State">
+              <el-descriptions-item :label="t('mihomo.state')">
                 <el-badge :type="status.is_running ? 'success' : 'info'" is-dot>
-                  <span>{{ status.is_running ? 'Running' : 'Stopped' }}</span>
+                  <span>{{ status.is_running ? t('common.running') : t('common.stopped') }}</span>
                 </el-badge>
               </el-descriptions-item>
-              <el-descriptions-item label="PID">
+              <el-descriptions-item :label="t('mihomo.pid')">
                 {{ status.pid > 0 ? status.pid : '—' }}
               </el-descriptions-item>
             </el-descriptions>
@@ -104,7 +104,7 @@
                 @click="control('start')"
               >
                 <el-icon><VideoPlay /></el-icon>
-                Start
+                {{ t('mihomo.start') }}
               </el-button>
               <el-button
                 type="warning"
@@ -113,7 +113,7 @@
                 @click="control('restart')"
               >
                 <el-icon><RefreshRight /></el-icon>
-                Restart
+                {{ t('mihomo.restart') }}
               </el-button>
               <el-button
                 type="danger"
@@ -122,7 +122,7 @@
                 @click="control('stop')"
               >
                 <el-icon><VideoPause /></el-icon>
-                Stop
+                {{ t('mihomo.stop') }}
               </el-button>
             </div>
           </template>
@@ -134,9 +134,9 @@
     <el-card style="margin-top: 20px">
       <template #header>
         <div class="card-header">
-          <span>GeoIP Database (MMDB)</span>
+          <span>{{ t('mihomo.geoipDb') }}</span>
           <el-tag :type="mmdb?.exists ? 'success' : 'danger'" size="small">
-            {{ mmdb?.exists ? 'Installed' : 'Not Found' }}
+            {{ mmdb?.exists ? t('mihomo.geoipInstalled') : t('mihomo.geoipNotFound') }}
           </el-tag>
         </div>
       </template>
@@ -144,37 +144,37 @@
       <el-skeleton v-if="mmdbLoading" :rows="2" animated />
       <template v-else-if="mmdb">
         <el-descriptions :column="1" border>
-          <el-descriptions-item label="Path">
+          <el-descriptions-item :label="t('mihomo.path')">
             <el-text class="mono" size="small">{{ mmdb.path }}</el-text>
           </el-descriptions-item>
-          <el-descriptions-item label="Size">
+          <el-descriptions-item :label="t('mihomo.size')">
             {{ mmdb.exists ? formatBytes(mmdb.size) : '—' }}
           </el-descriptions-item>
         </el-descriptions>
 
         <el-tabs v-model="mmdbTab" style="margin-top:14px">
           <!-- Download from URL -->
-          <el-tab-pane label="Download URL" name="url">
+          <el-tab-pane :label="t('mihomo.downloadUrl')" name="url">
             <div style="display:flex;gap:10px;align-items:center;padding:4px 0">
               <el-input
                 v-model="mmdbUrl"
-                placeholder="Leave empty for MetaCubeX default (country.mmdb)"
+                :placeholder="t('mihomo.downloadUrlPlaceholder')"
                 clearable
                 style="flex:1"
                 :disabled="mmdbDownloading"
               />
               <el-button type="primary" :loading="mmdbDownloading" @click="downloadMMDB">
                 <el-icon><Download /></el-icon>
-                {{ mmdb.exists ? 'Re-download' : 'Download' }}
+                {{ mmdb.exists ? t('mihomo.redownload') : t('mihomo.downloadBtn') }}
               </el-button>
             </div>
             <el-text v-if="mmdbDownloading" type="info" size="small" style="margin-top:6px;display:block">
-              Downloading... this may take a few minutes.
+              {{ t('mihomo.downloading') }}
             </el-text>
           </el-tab-pane>
 
           <!-- Upload local file -->
-          <el-tab-pane label="Upload File" name="upload">
+          <el-tab-pane :label="t('mihomo.uploadFile')" name="upload">
             <div style="padding:4px 0">
               <el-upload
                 drag
@@ -187,10 +187,10 @@
               >
                 <el-icon style="font-size:40px;color:var(--cv-text-muted)"><Upload /></el-icon>
                 <div style="margin-top:8px;color:var(--cv-text-muted)">
-                  Drag .mmdb file here or <em>click to select</em>
+                  {{ t('mihomo.uploadDrag') }} <em>{{ t('mihomo.uploadClick') }}</em>
                 </div>
                 <div style="font-size:12px;color:var(--cv-text-muted);margin-top:4px">
-                  Supports Country.mmdb / GeoLite2-Country.mmdb
+                  {{ t('mihomo.uploadSupports') }}
                 </div>
               </el-upload>
               <el-button
@@ -201,7 +201,7 @@
                 @click="uploadMMDB"
               >
                 <el-icon><Upload /></el-icon>
-                Upload to Server
+                {{ t('mihomo.uploadToServer') }}
               </el-button>
             </div>
           </el-tab-pane>
@@ -212,15 +212,15 @@
     <!-- Install / Update -->
     <el-card style="margin-top: 20px">
       <template #header>
-        <span>Install / Update</span>
+        <span>{{ t('mihomo.installUpdate') }}</span>
       </template>
 
       <div :class="{ 'form-disabled': formDisabled }">
         <el-form label-width="160px">
-          <el-form-item label="Target Version">
+          <el-form-item :label="t('mihomo.targetVersion')">
             <el-select
               v-model="targetVersion"
-              placeholder="Latest (auto)"
+              :placeholder="t('mihomo.latestAuto')"
               clearable
               filterable
               style="width: 260px"
@@ -245,14 +245,14 @@
               <el-icon><Refresh /></el-icon>
             </el-button>
             <el-text type="info" size="small" style="margin-left: 6px">
-              {{ status?.latest_version ? 'Latest: ' + status.latest_version : '' }}
+              {{ status?.latest_version ? t('mihomo.latestLabel', { version: status.latest_version }) : '' }}
             </el-text>
           </el-form-item>
 
-          <el-form-item label="Force Reinstall">
+          <el-form-item :label="t('mihomo.forceReinstall')">
             <el-switch v-model="forceInstall" :disabled="formDisabled" />
             <el-text type="info" size="small" style="margin-left: 10px">
-              Install even if already at the target version
+              {{ t('mihomo.forceReinstallDesc') }}
             </el-text>
           </el-form-item>
 
@@ -264,7 +264,7 @@
               @click="install"
             >
               <el-icon><Download /></el-icon>
-              {{ jobRunning ? 'Installing…' : (status?.installed ? 'Update Mihomo' : 'Install Mihomo') }}
+              {{ jobRunning ? t('mihomo.installing') : (status?.installed ? t('mihomo.updateMihomo') : t('mihomo.installMihomo')) }}
             </el-button>
           </el-form-item>
         </el-form>
@@ -291,15 +291,15 @@
         <el-alert
           v-if="job.stage === 'done' && !jobRunning"
           type="success"
-          :title="job.new_version ? `Installed ${job.new_version}` : 'Already up to date'"
-          :description="job.new_version && job.old_version ? `Updated from ${job.old_version} → ${job.new_version}` : ''"
+          :title="job.new_version ? t('mihomo.installedVersion', { version: job.new_version }) : t('mihomo.alreadyUpToDate')"
+          :description="job.new_version && job.old_version ? t('mihomo.updatedFrom', { old: job.old_version, new: job.new_version }) : ''"
           show-icon
           style="margin-top: 10px"
         />
         <el-alert
           v-if="job.stage === 'error'"
           type="error"
-          title="Installation failed"
+          :title="t('mihomo.installFailed')"
           :description="job.error"
           show-icon
           style="margin-top: 10px"
@@ -325,7 +325,9 @@ import {
   type InstallProgress
 } from '@/api/proxy'
 import request from '@/api/request'
+import { useI18n } from 'vue-i18n'
 
+const { t } = useI18n()
 const status = ref<MihomoInstallStatus | null>(null)
 const statusLoading = ref(false)
 const controlLoading = ref<string | null>(null)
@@ -366,12 +368,12 @@ const uploadMMDB = async () => {
       body: form,
     })
     const data = await res.json()
-    if (!res.ok) throw new Error(data.error || 'Upload failed')
-    ElMessage.success('MMDB uploaded successfully')
+    if (!res.ok) throw new Error(data.error || t('mihomo.uploadFailed'))
+    ElMessage.success(t('mihomo.uploadSuccess'))
     mmdbFile.value = null
     await loadMMDB()
   } catch (e: any) {
-    ElMessage.error(e.message || 'Upload failed')
+    ElMessage.error(e.message || t('mihomo.uploadFailed'))
   } finally {
     mmdbUploading.value = false
   }
@@ -395,10 +397,10 @@ const downloadMMDB = async () => {
       data: { url: mmdbUrl.value || '' },
       timeout: 15 * 60 * 1000
     })
-    ElMessage.success('MMDB downloaded successfully')
+    ElMessage.success(t('mihomo.downloadSuccess'))
     await loadMMDB()
   } catch (e: any) {
-    ElMessage.error(e.message || 'Download failed')
+    ElMessage.error(e.message || t('mihomo.downloadFailed'))
   } finally {
     mmdbDownloading.value = false
   }
@@ -454,13 +456,13 @@ const progressStatus = computed(() => {
 
 const stageLabel = computed(() => {
   const map: Record<string, string> = {
-    fetch_release: 'Fetching release info',
-    download:      'Downloading binary',
-    extract:       'Extracting archive',
-    install:       'Installing binary',
-    restart:       'Restarting mihomo',
-    done:          'Complete',
-    error:         'Failed',
+    fetch_release: t('mihomo.fetchRelease'),
+    download:      t('mihomo.downloadBinary'),
+    extract:       t('mihomo.extractArchive'),
+    install:       t('mihomo.installingBinary'),
+    restart:       t('mihomo.restartingMihomo'),
+    done:          t('mihomo.complete'),
+    error:         t('mihomo.failed'),
   }
   return map[job.value?.stage ?? ''] ?? job.value?.stage ?? ''
 })
@@ -484,7 +486,7 @@ const loadStatus = async () => {
   try {
     status.value = await getMihomoInstallStatus()
   } catch (e: any) {
-    ElMessage.error(e.message || 'Failed to load status')
+    ElMessage.error(e.message || t('mihomo.loadStatusFailed'))
   } finally {
     statusLoading.value = false
   }
@@ -497,7 +499,7 @@ const loadVersions = async () => {
     versions.value = res.versions
     versionsLoaded.value = true
   } catch (e: any) {
-    ElMessage.error(e.message || 'Failed to load version list')
+    ElMessage.error(e.message || t('mihomo.loadVersionsFailed'))
   } finally {
     versionsLoading.value = false
   }
@@ -513,10 +515,10 @@ const control = async (action: 'start' | 'stop' | 'restart') => {
   controlLoading.value = action
   try {
     await apiControlMihomo(action)
-    ElMessage.success(`Mihomo ${action} successful`)
+    ElMessage.success(t('mihomo.actionSuccess', { action }))
     await loadStatus()
   } catch (e: any) {
-    ElMessage.error(e.message || `${action} failed`)
+    ElMessage.error(e.message || t('mihomo.actionFailed', { action }))
   } finally {
     controlLoading.value = null
   }
@@ -532,9 +534,9 @@ const pollProgress = async () => {
       stopPolling()
       await loadStatus()
       if (p.stage === 'error') {
-        ElMessage.error('Installation failed: ' + (p.error || p.message))
+        ElMessage.error(t('mihomo.installProgressFailed') + (p.error || p.message))
       } else if (p.stage === 'done') {
-        ElMessage.success(p.new_version ? `Installed ${p.new_version}` : 'Already up to date')
+        ElMessage.success(p.new_version ? t('mihomo.installProgressSuccess', { version: p.new_version }) : t('mihomo.installProgressUpToDate'))
       }
     }
   } catch {
@@ -565,7 +567,7 @@ const install = async () => {
     }
     startPolling()
   } catch (e: any) {
-    ElMessage.error(e.message || 'Failed to start install job')
+    ElMessage.error(e.message || t('mihomo.installFailedStart'))
   }
 }
 

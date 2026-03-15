@@ -1,24 +1,24 @@
 <template>
   <div class="rules-view">
     <div class="toolbar">
-      <span class="count">{{ filteredRules.length }} / {{ rules.length }} rules</span>
+      <span class="count">{{ t('rules.count', { filtered: filteredRules.length, total: rules.length }) }}</span>
       <el-input
         v-model="filter"
-        placeholder="Filter by type, payload or proxy..."
+        :placeholder="t('rules.filterPlaceholder')"
         clearable
         style="width:280px"
         size="small"
       >
         <template #prefix><el-icon><Search /></el-icon></template>
       </el-input>
-      <el-select v-model="typeFilter" placeholder="All types" clearable style="width:160px" size="small">
-        <el-option v-for="t in ruleTypes" :key="t" :label="t" :value="t" />
+      <el-select v-model="typeFilter" :placeholder="t('rules.allTypes')" clearable style="width:160px" size="small">
+        <el-option v-for="tp in ruleTypes" :key="tp" :label="tp" :value="tp" />
       </el-select>
       <el-button size="small" :loading="loading" @click="loadRules">
-        <el-icon><Refresh /></el-icon>Refresh
+        <el-icon><Refresh /></el-icon>{{ t('common.refresh') }}
       </el-button>
       <el-button size="small" :disabled="rules.length === 0" @click="downloadRules">
-        <el-icon><Download /></el-icon>Export
+        <el-icon><Download /></el-icon>{{ t('common.export') }}
       </el-button>
     </div>
 
@@ -32,13 +32,13 @@
       <el-table-column type="index" width="60" label="#"
         :index="(i: number) => (page - 1) * pageSize + i + 1"
       />
-      <el-table-column label="Type" width="160">
+      <el-table-column :label="t('rules.type')" width="160">
         <template #default="{ row }">
           <el-tag size="small" :type="ruleTagType(row.type)">{{ row.type }}</el-tag>
         </template>
       </el-table-column>
-      <el-table-column prop="payload" label="Payload" min-width="200" show-overflow-tooltip />
-      <el-table-column label="Proxy" width="160">
+      <el-table-column prop="payload" :label="t('rules.payload')" min-width="200" show-overflow-tooltip />
+      <el-table-column :label="t('rules.proxyCol')" width="160">
         <template #default="{ row }">
           <el-tag
             size="small"
@@ -63,7 +63,7 @@
     </div>
 
     <div v-if="!loading && rules.length === 0" style="text-align:center;padding:40px">
-      <el-empty description="No rules — mihomo may not be running or no config applied" />
+      <el-empty :description="t('rules.noRules')" />
     </div>
   </div>
 </template>
@@ -72,7 +72,9 @@
 import { ref, computed, onMounted, watch } from 'vue'
 import { Search, Refresh, Download } from '@element-plus/icons-vue'
 import request from '@/api/request'
+import { useI18n } from 'vue-i18n'
 
+const { t } = useI18n()
 const rules = ref<any[]>([])
 const filter = ref('')
 const typeFilter = ref('')

@@ -1,6 +1,6 @@
 <template>
   <div class="dashboard-view">
-    <h1>Dashboard</h1>
+    <h1>{{ t('dashboard.title') }}</h1>
 
     <el-row :gutter="20" class="stats-row">
       <el-col :span="6">
@@ -8,7 +8,7 @@
           <div class="stat-content">
             <el-icon class="stat-icon" color="#409eff"><Odometer /></el-icon>
             <div>
-              <p class="stat-label">Uptime</p>
+              <p class="stat-label">{{ t('dashboard.uptime') }}</p>
               <p class="stat-value">{{ formatUptime(systemStore.info?.uptime || 0) }}</p>
             </div>
           </div>
@@ -19,8 +19,8 @@
           <div class="stat-content">
             <el-icon class="stat-icon" :color="mihomoStatusColor"><CircleCheck /></el-icon>
             <div>
-              <p class="stat-label">Mihomo Status</p>
-              <p class="stat-value">{{ systemStore.info?.mihomo_status || 'Unknown' }}</p>
+              <p class="stat-label">{{ t('dashboard.mihomoStatus') }}</p>
+              <p class="stat-value">{{ systemStore.info?.mihomo_status || t('common.unknown') }}</p>
             </div>
           </div>
         </el-card>
@@ -30,7 +30,7 @@
           <div class="stat-content">
             <el-icon class="stat-icon" color="#e6a23c"><Download /></el-icon>
             <div>
-              <p class="stat-label">Sources</p>
+              <p class="stat-label">{{ t('dashboard.sources') }}</p>
               <p class="stat-value">{{ sourceStore.sources.length }}</p>
             </div>
           </div>
@@ -41,7 +41,7 @@
           <div class="stat-content">
             <el-icon class="stat-icon" color="#f56c6c"><Connection /></el-icon>
             <div>
-              <p class="stat-label">Proxies</p>
+              <p class="stat-label">{{ t('dashboard.proxies') }}</p>
               <p class="stat-value">{{ Object.keys(proxyStore.proxies).length }}</p>
             </div>
           </div>
@@ -53,13 +53,13 @@
     <el-card class="control-card" style="margin-bottom: 20px;">
       <template #header>
         <div class="card-header">
-          <span>Mihomo Control</span>
-          <el-tag :type="mihomoStatusTagType" size="small">{{ systemStore.info?.mihomo_status || 'Unknown' }}</el-tag>
+          <span>{{ t('dashboard.mihomoControl') }}</span>
+          <el-tag :type="mihomoStatusTagType" size="small">{{ systemStore.info?.mihomo_status || t('common.unknown') }}</el-tag>
         </div>
       </template>
       <div class="control-row">
         <div class="version-info">
-          <span class="version-label">Binary Version:</span>
+          <span class="version-label">{{ t('dashboard.binaryVersion') }}:</span>
           <el-tag type="info" size="small">{{ mihomoVersion || '—' }}</el-tag>
         </div>
         <div class="control-buttons">
@@ -68,26 +68,26 @@
             :loading="controlling === 'start'"
             :disabled="mihomoRunning || !!controlling"
             @click="doControl('start')"
-          >Start</el-button>
+          >{{ t('dashboard.start') }}</el-button>
           <el-button
             type="danger"
             :loading="controlling === 'stop'"
             :disabled="!mihomoRunning || !!controlling"
             @click="doControl('stop')"
-          >Stop</el-button>
+          >{{ t('dashboard.stop') }}</el-button>
           <el-button
             type="warning"
             :loading="controlling === 'restart'"
             :disabled="!mihomoRunning || !!controlling"
             @click="doControl('restart')"
-          >Restart</el-button>
+          >{{ t('dashboard.restart') }}</el-button>
           <el-divider direction="vertical" />
           <el-button
             :loading="checkingUpdate"
             :disabled="!!controlling || checkingUpdate"
             @click="doUpdate"
-          >Check & Update</el-button>
-          <el-button size="small" @click="fetchVersion" :loading="loadingVersion">Refresh Version</el-button>
+          >{{ t('dashboard.checkUpdate') }}</el-button>
+          <el-button size="small" @click="fetchVersion" :loading="loadingVersion">{{ t('dashboard.refreshVersion') }}</el-button>
         </div>
       </div>
     </el-card>
@@ -96,7 +96,7 @@
     <el-card class="speed-card" style="margin-bottom: 20px;">
       <template #header>
         <div class="card-header">
-          <span>Network Speed <span class="chart-window-label">2 min</span></span>
+          <span>{{ t('dashboard.networkSpeed') }} <span class="chart-window-label">2 min</span></span>
           <div style="display:flex;gap:16px;font-size:13px">
             <span style="color:#5865f2">↑ {{ formatRate(upRate) }}</span>
             <span style="color:#22d3ee">↓ {{ formatRate(downRate) }}</span>
@@ -150,8 +150,8 @@
           <span v-for="label in timeAxisLabels" :key="label">{{ label }}</span>
         </div>
         <div class="chart-labels">
-          <span style="color:#5865f2">↑ {{ formatBytes(proxyStore.traffic.upTotal) }} total</span>
-          <span style="color:#22d3ee">↓ {{ formatBytes(proxyStore.traffic.downTotal) }} total</span>
+          <span style="color:#5865f2">↑ {{ formatBytes(proxyStore.traffic.upTotal) }} {{ t('dashboard.total') }}</span>
+          <span style="color:#22d3ee">↓ {{ formatBytes(proxyStore.traffic.downTotal) }} {{ t('dashboard.total') }}</span>
         </div>
       </div>
     </el-card>
@@ -161,51 +161,51 @@
         <el-card class="info-card">
           <template #header>
             <div class="card-header">
-              <span>System Information</span>
-              <el-button size="small" @click="refreshSystem">Refresh</el-button>
+              <span>{{ t('dashboard.systemInfo') }}</span>
+              <el-button size="small" @click="refreshSystem">{{ t('common.refresh') }}</el-button>
             </div>
           </template>
           <el-descriptions :column="1" border>
-            <el-descriptions-item label="Version">
+            <el-descriptions-item :label="t('dashboard.version')">
               {{ systemStore.info?.version || '-' }}
             </el-descriptions-item>
-            <el-descriptions-item label="Go Version">
+            <el-descriptions-item :label="t('dashboard.goVersion')">
               {{ systemStore.info?.go_version || '-' }}
             </el-descriptions-item>
-            <el-descriptions-item label="Database">
+            <el-descriptions-item :label="t('dashboard.database')">
               {{ systemStore.info?.database || '-' }}
             </el-descriptions-item>
           </el-descriptions>
 
           <div class="auto-update-card">
             <div class="auto-update-header">
-              <span>Last Auto Update</span>
+              <span>{{ t('dashboard.lastAutoUpdate') }}</span>
               <el-tag v-if="systemStore.info?.last_auto_update_action" :type="autoUpdateTagType" size="small">
                 {{ formatAutoUpdateAction(systemStore.info?.last_auto_update_action || '') }}
               </el-tag>
-              <el-tag v-else type="info" size="small">No Record</el-tag>
+              <el-tag v-else type="info" size="small">{{ t('dashboard.noRecord') }}</el-tag>
             </div>
             <p class="auto-update-time">
               {{ formatDateTime(systemStore.info?.last_auto_update_at) }}
             </p>
             <p class="auto-update-details">
-              {{ systemStore.info?.last_auto_update_details || 'No automatic update record yet.' }}
+              {{ systemStore.info?.last_auto_update_details || t('dashboard.noAutoUpdateRecord') }}
             </p>
           </div>
 
           <div class="auto-update-card" style="margin-top: 12px;">
             <div class="auto-update-header">
-              <span>Last Alert</span>
+              <span>{{ t('dashboard.lastAlert') }}</span>
               <el-tag v-if="systemStore.info?.last_alert_action" :type="alertTagType" size="small">
                 {{ formatAlertAction(systemStore.info?.last_alert_action || '') }}
               </el-tag>
-              <el-tag v-else type="info" size="small">No Record</el-tag>
+              <el-tag v-else type="info" size="small">{{ t('dashboard.noRecord') }}</el-tag>
             </div>
             <p class="auto-update-time">
               {{ formatDateTime(systemStore.info?.last_alert_at) }}
             </p>
             <p class="auto-update-details">
-              {{ systemStore.info?.last_alert_details || 'No alert record yet.' }}
+              {{ systemStore.info?.last_alert_details || t('dashboard.noAlertRecord') }}
             </p>
           </div>
         </el-card>
@@ -223,7 +223,9 @@ import { useSourceStore } from '@/stores/source'
 import { useProxyStore } from '@/stores/proxy'
 import { controlMihomo, getMihomoVersion, updateMihomo } from '@/api/proxy'
 import { Odometer, CircleCheck, Download, Connection } from '@element-plus/icons-vue'
+import { useI18n } from 'vue-i18n'
 
+const { t } = useI18n()
 const systemStore = useSystemStore()
 const sourceStore = useSourceStore()
 const proxyStore = useProxyStore()
@@ -338,7 +340,7 @@ const fetchVersion = async () => {
     const res = await getMihomoVersion()
     mihomoVersion.value = res.version
   } catch {
-    mihomoVersion.value = 'N/A'
+    mihomoVersion.value = t('common.na')
   } finally {
     loadingVersion.value = false
   }
@@ -348,10 +350,10 @@ const doControl = async (action: 'start' | 'stop' | 'restart') => {
   controlling.value = action
   try {
     await controlMihomo(action)
-    ElMessage.success(`Mihomo ${action} successful`)
+    ElMessage.success(t('dashboard.mihomoActionSuccess', { action }))
     await systemStore.fetchInfo()
   } catch (e: any) {
-    ElMessage.error(`Failed to ${action} mihomo: ${e?.message || e}`)
+    ElMessage.error(t('dashboard.mihomoActionFailed', { action, error: e?.message || e }))
   } finally {
     controlling.value = ''
   }
@@ -362,20 +364,20 @@ const doUpdate = async () => {
   try {
     const res = await updateMihomo()
     if (res.updated) {
-      ElMessage.success(`Updated: ${res.old_version} → ${res.new_version}`)
+      ElMessage.success(t('dashboard.updatedMsg', { old: res.old_version, new: res.new_version }))
       await fetchVersion()
     } else {
-      ElMessage.info(`Already up to date (${res.current_version})`)
+      ElMessage.info(t('dashboard.alreadyUpToDate', { version: res.current_version }))
     }
   } catch (e: any) {
-    ElMessage.error(`Update failed: ${e?.message || e}`)
+    ElMessage.error(t('dashboard.updateFailed', { error: e?.message || e }))
   } finally {
     checkingUpdate.value = false
   }
 }
 
 const formatAlertAction = (action: string): string => {
-  if (!action) return 'Unknown'
+  if (!action) return t('common.unknown')
   return action
     .replace('alert_', '')
     .split('_')
@@ -384,7 +386,7 @@ const formatAlertAction = (action: string): string => {
 }
 
 const formatAutoUpdateAction = (action: string): string => {
-  if (!action) return 'Unknown'
+  if (!action) return t('common.unknown')
   return action
     .replace('mihomo_update_', '')
     .split('_')

@@ -2,6 +2,9 @@
   <div class="header">
     <div class="header-title">{{ pageTitle }}</div>
     <div class="header-right">
+      <el-button size="small" link class="lang-btn" @click="toggleLocale">
+        {{ t('header.switchLang') }}
+      </el-button>
       <el-dropdown @command="handleCommand" trigger="click">
         <div class="user-btn">
           <div class="user-avatar">{{ userInitial }}</div>
@@ -11,10 +14,10 @@
         <template #dropdown>
           <el-dropdown-menu>
             <el-dropdown-item command="settings">
-              <el-icon><Setting /></el-icon>Settings
+              <el-icon><Setting /></el-icon>{{ t('header.settings') }}
             </el-dropdown-item>
             <el-dropdown-item divided command="logout">
-              <el-icon><SwitchButton /></el-icon>Logout
+              <el-icon><SwitchButton /></el-icon>{{ t('header.logout') }}
             </el-dropdown-item>
           </el-dropdown-menu>
         </template>
@@ -29,34 +32,44 @@ import { useRouter, useRoute } from 'vue-router'
 import { useUserStore } from '@/stores/user'
 import { ElMessage } from 'element-plus'
 import { ArrowDown, Setting, SwitchButton } from '@element-plus/icons-vue'
+import { useI18n } from 'vue-i18n'
+import { setLocale } from '@/i18n'
 
+const { t, locale } = useI18n()
 const router = useRouter()
 const route = useRoute()
 const userStore = useUserStore()
 
-const pageTitles: Record<string, string> = {
-  '/': 'Dashboard',
-  '/proxies': 'Proxies',
-  '/profiles': 'Profiles',
-  '/connections': 'Connections',
-  '/rules': 'Rules',
-  '/logs': 'Logs',
-  '/mihomo': 'Mihomo',
-  '/settings': 'Settings',
+const pageTitleKeys: Record<string, string> = {
+  '/': 'nav.dashboard',
+  '/proxies': 'nav.proxies',
+  '/profiles': 'nav.profiles',
+  '/connections': 'nav.connections',
+  '/rules': 'nav.rules',
+  '/logs': 'nav.logs',
+  '/mihomo': 'nav.mihomo',
+  '/settings': 'nav.settings',
 }
 
-const pageTitle = computed(() => pageTitles[route.path] ?? 'Proxyd')
+const pageTitle = computed(() => {
+  const key = pageTitleKeys[route.path]
+  return key ? t(key) : 'Proxyd'
+})
 
 const userInitial = computed(() =>
   (userStore.username?.[0] ?? 'U').toUpperCase()
 )
+
+const toggleLocale = () => {
+  setLocale(locale.value === 'zh' ? 'en' : 'zh')
+}
 
 const handleCommand = async (command: string) => {
   if (command === 'settings') router.push('/settings')
   if (command === 'logout') {
     await userStore.logout()
     router.push('/login')
-    ElMessage.success('Logged out')
+    ElMessage.success(t('header.loggedOut'))
   }
 }
 </script>
@@ -82,6 +95,21 @@ const handleCommand = async (command: string) => {
 .header-right {
   display: flex;
   align-items: center;
+  gap: 8px;
+}
+
+.lang-btn {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--cv-text-muted);
+  padding: 4px 8px;
+  border-radius: var(--cv-radius-sm);
+  transition: color 0.15s, background 0.15s;
+}
+
+.lang-btn:hover {
+  color: var(--cv-accent);
+  background: var(--cv-accent-soft);
 }
 
 .user-btn {
