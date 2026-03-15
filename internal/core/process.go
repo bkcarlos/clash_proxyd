@@ -15,7 +15,8 @@ type Process struct {
 	configPath string
 	logFile    string // path to write mihomo stdout+stderr; empty = os.Stdout/Stderr
 	cmd        *exec.Cmd
-	logFd      *os.File // kept open while process runs
+	logFd      *os.File      // kept open while process runs
+	exited     chan struct{}  // closed when the child process exits
 }
 
 // NewProcess creates a new mihomo process.
@@ -70,6 +71,17 @@ func (p *Process) Start() error {
 		return fmt.Errorf("failed to start mihomo: %w", err)
 	}
 
+	// Reap the child when it exits so it never becomes a zombie.
+	p.exited = make(chan struct{})
+	go func() {
+		_ = p.cmd.Wait()
+		close(p.exited)
+		if p.logFd != nil {
+			_ = p.logFd.Close()
+			p.logFd = nil
+		}
+	}()
+
 	// Give process time to start
 	time.Sleep(500 * time.Millisecond)
 
@@ -97,37 +109,15 @@ func (p *Process) Stop() error {
 		}
 	}
 
-	// Wait for process to exit
-	done := make(chan error, 1)
-	go func() {
-		_, err := p.cmd.Process.Wait()
-		done <- err
-	}()
-
+	// Wait for the reaper goroutine to confirm exit.
 	select {
 	case <-time.After(5 * time.Second):
-		// Timeout, force kill
 		_ = p.cmd.Process.Kill()
-		return fmt.Errorf("timeout waiting for process to exit")
-	case err := <-done:
-		if err != nil {
-			return fmt.Errorf("process exit error: %w", err)
-		}
+		return fmt.Errorf("timeout waiting for process to exit (pid: %d)", pid)
+	case <-p.exited:
 	}
 
-	// Verify process is stopped
-	for i := 0; i < 10; i++ {
-		if !p.isRunning() {
-			if p.logFd != nil {
-				_ = p.logFd.Close()
-				p.logFd = nil
-			}
-			return nil
-		}
-		time.Sleep(100 * time.Millisecond)
-	}
-
-	return fmt.Errorf("process may still be running (pid: %d)", pid)
+	return nil
 }
 
 // Restart restarts the mihomo process
