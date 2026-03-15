@@ -59,7 +59,7 @@ func (s *Scheduler) AddJob(name string, schedule string, job JobFunc) error {
 
 	wrappedJob := func() {
 		if err := job(); err != nil {
-			logx.Error("Scheduled job failed",
+			logx.Warn("Scheduled job failed",
 				zap.String("job", name),
 				zap.Error(err))
 			s.writeAudit("alert_source_update_failed", "alert", fmt.Sprintf("job=%s failed: %v", name, err))

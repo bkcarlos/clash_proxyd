@@ -3,6 +3,7 @@ package source
 import (
 	"crypto/sha256"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -50,10 +51,24 @@ func (f *Fetcher) Fetch(url string) ([]byte, error) {
 		if err == nil {
 			return data, nil
 		}
+		// Permanent HTTP errors (4xx except 429) are not retryable.
+		var permErr *permanentHTTPError
+		if errors.As(err, &permErr) {
+			return nil, err
+		}
 		lastErr = err
 	}
 
 	return nil, fmt.Errorf("failed after %d retries: %w", f.maxRetries, lastErr)
+}
+
+// permanentHTTPError wraps a non-retryable HTTP status code error.
+type permanentHTTPError struct {
+	StatusCode int
+}
+
+func (e *permanentHTTPError) Error() string {
+	return fmt.Sprintf("unexpected status code: %d", e.StatusCode)
 }
 
 // fetchOnce performs a single fetch attempt
@@ -73,6 +88,10 @@ func (f *Fetcher) fetchOnce(url string) ([]byte, error) {
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
+		// 4xx (except 429 Too Many Requests) are permanent — no point retrying.
+		if resp.StatusCode >= 400 && resp.StatusCode < 500 && resp.StatusCode != http.StatusTooManyRequests {
+			return nil, &permanentHTTPError{StatusCode: resp.StatusCode}
+		}
 		return nil, fmt.Errorf("unexpected status code: %d", resp.StatusCode)
 	}
 
