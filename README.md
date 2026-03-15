@@ -1,821 +1,345 @@
-# Proxyd - Mihomo Proxy Manager
+<div align="center">
 
-> A modern web-based management system for mihomo (Clash Meta) proxy server.
+# Clash Proxyd
+
+**轻量级 mihomo 代理管理面板 · Lightweight mihomo Proxy Management Panel**
 
 [![Go Version](https://img.shields.io/badge/Go-1.22+-00ADD8?style=flat&logo=go)](https://golang.org/)
 [![Vue Version](https://img.shields.io/badge/Vue-3.4-4FC08D?style=flat&logo=vue.js&logoColor=white)](https://vuejs.org/)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
-## Quick Start
+[中文](#中文) · [English](#english)
 
-### Prerequisites
-
-- Go 1.22+
-- Node.js 20+
-- SQLite3
-- mihomo binary
-
-### Installation
-
-```bash
-# Clone the repository
-git clone https://github.com/clash-proxyd/proxyd.git
-cd proxyd
-
-# Install backend dependencies
-go mod download
-
-# Install frontend dependencies
-cd web-ui && npm install && cd ..
-
-# Build the project
-make build
-
-# Initialize database
-./build/proxyd -c config.example.yaml -init-db
-
-# Run the server
-./build/proxyd -c config.example.yaml
-```
-
-The backend will start on `http://localhost:8080` and the web UI will be served from the same address.
-
-### Default Credentials
-
-- Username: `admin`
-- Password: `admin`
-- **Important:** Change the password after first login!
-
-### CLI mihomo Management (via proxyd API)
-
-`proxyd` now supports managing mihomo directly from CLI by calling proxyd API:
-
-```bash
-# Show runtime status
-./build/proxyd -mihomo status -api-base http://127.0.0.1:8080/api/v1 -username admin -password '<admin-password>'
-
-# Start / stop / restart mihomo
-./build/proxyd -mihomo start   -api-base http://127.0.0.1:8080/api/v1 -username admin -password '<admin-password>'
-./build/proxyd -mihomo stop    -api-base http://127.0.0.1:8080/api/v1 -username admin -password '<admin-password>'
-./build/proxyd -mihomo restart -api-base http://127.0.0.1:8080/api/v1 -username admin -password '<admin-password>'
-```
-
-
-- ✅ Subscribe to multiple proxy sources
-- ✅ Merge and manage mihomo configurations
-- ✅ Web UI for easy management
-- ✅ RESTful API
-- ✅ Automatic proxy group generation
-- ✅ mihomo process control (start/stop/restart)
-- ✅ Real-time traffic and memory statistics
-- ✅ Configuration versioning (revisions)
-- ✅ Scheduled source updates
-- ✅ Batch system settings update
-- ✅ Auto download and update mihomo on startup
-
-### Verification
-
-```bash
-# Backend tests
-go test ./...
-
-# Frontend type-check + build
-npm --prefix web-ui run build
-```
-
-### Acceptance (Phase 1 Gate)
-
-Run backend first, then execute repeatable acceptance script:
-
-```bash
-# Terminal 1
-./build/proxyd -c config.example.yaml
-
-# Terminal 2
-PROXYD_PASSWORD=admin ./scripts/acceptance.sh
-```
-
-The script verifies:
-- health check
-- login
-- source create/test/fetch
-- config generate/apply
-- mihomo start/restart/stop
-- proxy switch
-- failure paths (invalid source URL, invalid YAML, config path traversal, mihomo unavailable)
-
-A markdown report is generated under `logs/acceptance-*.md` for reproducible acceptance records.
-
-Notes:
-- If mihomo is unavailable in current environment, mihomo-dependent checks are reported as `SKIP`.
-- For production gate, run acceptance once in an environment with real mihomo binary and reachable controller.
-
-### Phase 4 verification add-on
-
-After phase-1 acceptance passes, additionally verify:
-- rollback API: `POST /api/v1/config/revisions/:id/rollback`
-- delay cache: second `POST /api/v1/proxy/proxies/:name/test` returns `from_cache=true`
-- dashboard websocket refresh: `Last Auto Update` / `Last Alert` update without manual refresh
-
-Refer to `SETUP.md` section `6.1 Phase 4 Verification Add-on` for reproducible commands.
+</div>
 
 ---
 
-# Proxyd - Mihomo 代理管理系统
+<a name="中文"></a>
 
-## 一、项目目标
+## 🇨🇳 中文
 
-构建一个名为 `proxyd` 的单机代理管理系统，部署在 Ubuntu Server 上，满足以下核心需求：
+### 项目简介
 
-- 支持导入订阅链接
-- 支持上传或粘贴 mihomo 配置文件
-- 支持生成并应用运行配置
-- 支持启动、停止、重载 mihomo
-- 支持查看代理组并手动切换节点
-- 支持自动选择代理
-- 支持基础日志、状态与健康检查
+Clash Proxyd 是一个部署在 Ubuntu Server 上的轻量级 mihomo（Clash Meta）管理面板，提供订阅管理、配置版本化、代理节点切换、实时流量监控等功能，所有操作均通过内嵌 Web UI 完成。
 
-**不做桌面端能力，不做复杂规则可视化编辑器，不做多租户和多实例**。这样范围更贴合 Server 场景，也能最大化复用 mihomo 已有能力。
+### 功能特性
 
-## 二、总体架构
+- **订阅管理**：支持 HTTP 订阅链接和本地文件，一键 Fetch & Apply，3 列卡片式布局，点选即激活
+- **配置版本化**：每次应用配置自动生成版本快照，支持查看内容和一键回滚
+- **代理管理**：双面板布局（左侧群组列表 + 右侧节点卡片），点击节点直接切换，内置延迟测试
+- **实时监控**：Dashboard 通过 WebSocket 推送流量数据，2 分钟滚动速率折线图
+- **mihomo 生命周期**：自动检测、启动、停止、重启 mihomo 进程；支持自动更新二进制
+- **定时更新**：可配置订阅自动刷新周期
+- **JWT 认证**：所有 API 受 JWT 保护，支持密码修改和 token 刷新
 
-系统采用三层结构：
-
-### 1. 数据面：mihomo
-
-负责：
-- 节点协议处理
-- DNS
-- 分流规则
-- 代理组执行
-- 自动测速与自动切换
-
-通过 `external-controller` 仅监听本地地址，由管理程序调用。
-
-### 2. 控制面：proxyd（Go + Gin）
-
-负责：
-- 订阅拉取
-- 配置解析与合并
-- 自动代理策略生成
-- SQLite 持久化
-- 启停与热重载 mihomo
-- 封装业务 API
-- 日志与状态聚合
-- 定时任务与健康检查
-
-### 3. 展示面：Vue 3 + Vite
-
-负责：
-- 登录页
-- 状态页
-- 订阅页
-- 配置页
-- 代理页
-
-## 三、功能范围
-
-### 1. MVP 功能
-
-#### 订阅管理
-- 新增订阅 URL
-- 立即更新订阅
-- 开关自动更新
-- 查看最近更新时间
-- 启用/禁用某个订阅
-
-#### 配置管理
-- 上传完整 mihomo YAML
-- 粘贴文本配置
-- 保存为"配置源"
-- 生成最终运行配置
-- 应用并热重载
-
-#### 代理管理
-- 查看代理组
-- 查看当前已选节点
-- 手动切换节点
-- 一键切换"自动选择模式"
-
-#### 自动代理
-- 手动模式
-- 最快优先（url-test）
-- 故障转移（fallback）
-- 负载均衡（load-balance）
-
-#### 运行管理
-- 启动 mihomo
-- 停止 mihomo
-- 重载 mihomo
-- 查看版本
-- 查看运行状态
-- 查看最近日志
-
-### 2. 第二阶段功能
-- 节点按区域自动分组
-- 延迟测试结果缓存
-- 配置版本历史
-- 回滚
-- WebSocket 状态推送
-- 基础告警
-
-## 四、技术选型
-
-### 后端
-- **Go 1.22+**
-- **Gin** - Web 框架
-- **SQLite** - 数据库
-- **database/sql** + **github.com/mattn/go-sqlite3** - 驱动
-- **gopkg.in/yaml.v3** - YAML 解析
-- **robfig/cron/v3** - 定时任务
-- **zap 或 zerolog** - 日志
-
-### 前端
-- **Vue 3**
-- **Vite**
-- **Vue Router**
-- **Pinia**
-- **Axios**
-- **Element Plus 或 Naive UI**（二选一）
-
-### 部署
-- **Ubuntu Server 22.04/24.04**
-- **systemd**
-- **Nginx 或 Caddy** 反向代理可选
-- **mihomo** 二进制独立部署
-
-## 五、系统模块设计
-
-### 1. 后端模块
-
-建议目录结构：
+### 系统架构
 
 ```
-proxyd/
-├── cmd/
-│   └── proxyd/
-│       └── main.go
-├── internal/
-│   ├── api/            # HTTP 接口层
-│   ├── auth/           # 登录、Token
-│   ├── app/            # 应用初始化
-│   ├── core/           # mihomo 进程与 API 管理
-│   ├── source/         # 订阅/文件/手工配置源
-│   ├── parser/         # YAML 解析与校验
-│   ├── renderer/       # runtime.yaml 生成
-│   ├── policy/         # 自动代理策略生成
-│   ├── scheduler/      # 定时更新订阅
-│   ├── store/          # SQLite 持久化
-│   ├── runtime/        # 当前运行状态
-│   ├── health/         # 健康检查
-│   └── logx/           # 日志
-├── web/                # 前端产物
-├── deployments/
-│   └── systemd/
-└── data/
-    ├── db/
-    ├── profiles/
-    ├── generated/
-    ├── cache/
-    └── logs/
+mihomo (代理协议引擎)  ←  proxyd (Go 控制面)  ←  Vue 3 Web UI
 ```
 
-### 2. 前端模块
+| 层级 | 职责 |
+|------|------|
+| mihomo | 节点协议处理、DNS、分流规则、代理组执行 |
+| proxyd | 订阅拉取、配置解析合并、进程管理、API、SQLite 持久化 |
+| Web UI | 页面交互，通过 `/api/v1` 与 proxyd 通信 |
 
-```
-web-ui/
-├── src/
-│   ├── api/
-│   ├── router/
-│   ├── stores/
-│   ├── views/
-│   │   ├── LoginView.vue
-│   │   ├── DashboardView.vue
-│   │   ├── SourcesView.vue
-│   │   ├── ConfigView.vue
-│   │   └── ProxiesView.vue
-│   ├── components/
-│   └── layouts/
-```
+### 快速开始
 
-## 六、核心数据模型
+#### 前置要求
 
-### 1. 配置源
+- Go 1.22+
+- Node.js 20+
+- SQLite3（CGO 依赖）
+- mihomo 二进制（可通过 Web UI 自动下载）
 
-```go
-type SourceType string
+#### 构建
 
-const (
-    SourceSubscription SourceType = "subscription"
-    SourceFile         SourceType = "file"
-    SourceManual       SourceType = "manual"
-)
+```bash
+git clone https://github.com/bkcarlos/clash_proxyd.git
+cd clash_proxyd
 
-type ConfigSource struct {
-    ID            string
-    Name          string
-    Type          SourceType
-    URL           string
-    Content       string
-    Enabled       bool
-    AutoUpdate    bool
-    UpdateEvery   int
-    LastSyncAt    *time.Time
-    LastStatus    string
-    LastError     string
-    CreatedAt     time.Time
-    UpdatedAt     time.Time
-}
+# 安装前端依赖
+npm --prefix web-ui install
+
+# 构建（前端 + 后端，嵌入 Web UI）
+make build-all
+
+# 仅构建后端（不含 Web UI）
+make build-backend
+
+# 仅构建前端
+make build-frontend
 ```
 
-### 2. 自动代理策略
+#### 初始化并运行
 
-```go
-type AutoPolicyMode string
+```bash
+# 复制配置文件
+cp config.example.yaml config.yaml
 
-const (
-    PolicyManual      AutoPolicyMode = "manual"
-    PolicyURLTest     AutoPolicyMode = "url-test"
-    PolicyFallback    AutoPolicyMode = "fallback"
-    PolicyLoadBalance AutoPolicyMode = "load-balance"
-)
+# 初始化数据库
+./build/proxyd -c config.yaml -init-db
 
-type PolicyOptions struct {
-    Mode        AutoPolicyMode
-    TestURL     string
-    IntervalSec int
-    ToleranceMs int
-    Strategy    string
-    Preferred   []string
-}
+# 启动（含嵌入式 Web UI）
+./build/proxyd -c config.yaml -web
 ```
 
-### 3. 运行状态
+浏览器访问 `http://localhost:8080`，默认账号 `admin` / `admin`，**首次登录后请立即修改密码**。
 
-```go
-type RuntimeState struct {
-    CoreRunning      bool
-    CoreVersion      string
-    ActiveSourceID   string
-    ActiveConfigHash string
-    PolicyMode       string
-    LastReloadAt     *time.Time
-    LastReloadError  string
-}
+#### 开发模式
+
+```bash
+# 终端 1：启动后端（热重载）
+make dev-backend
+
+# 终端 2：启动前端开发服务器（HMR，端口 5173）
+make dev-frontend
 ```
 
-## 七、数据库设计
-
-SQLite 只需要少量表即可。
-
-### 1. sources
-
-保存订阅、本地配置、手工配置
-
-```sql
-CREATE TABLE sources (
-  id TEXT PRIMARY KEY,
-  name TEXT NOT NULL,
-  type TEXT NOT NULL,
-  url TEXT,
-  content TEXT,
-  enabled INTEGER NOT NULL DEFAULT 1,
-  auto_update INTEGER NOT NULL DEFAULT 0,
-  update_every INTEGER NOT NULL DEFAULT 60,
-  last_sync_at DATETIME,
-  last_status TEXT,
-  last_error TEXT,
-  created_at DATETIME NOT NULL,
-  updated_at DATETIME NOT NULL
-);
-```
-
-### 2. app_settings
-
-保存全局配置
-
-```sql
-CREATE TABLE app_settings (
-  key TEXT PRIMARY KEY,
-  value TEXT NOT NULL
-);
-```
-
-### 3. config_revisions
-
-保存生成后的配置快照
-
-```sql
-CREATE TABLE config_revisions (
-  id TEXT PRIMARY KEY,
-  source_id TEXT,
-  content TEXT NOT NULL,
-  content_hash TEXT NOT NULL,
-  created_at DATETIME NOT NULL
-);
-```
-
-### 4. runtime_state
-
-保存当前生效状态
-
-```sql
-CREATE TABLE runtime_state (
-  id INTEGER PRIMARY KEY CHECK (id = 1),
-  core_running INTEGER NOT NULL,
-  core_version TEXT,
-  active_source_id TEXT,
-  active_config_hash TEXT,
-  policy_mode TEXT,
-  last_reload_at DATETIME,
-  last_reload_error TEXT
-);
-```
-
-### 5. audit_logs
-
-记录关键操作
-
-```sql
-CREATE TABLE audit_logs (
-  id TEXT PRIMARY KEY,
-  action TEXT NOT NULL,
-  detail TEXT,
-  created_at DATETIME NOT NULL
-);
-```
-
-## 八、后端 API 设计
-
-所有前端都只访问 proxyd，不直接访问 mihomo。
-
-### 1. 认证接口
-- `POST /api/v1/auth/login`
-- `POST /api/v1/auth/logout`
-- `GET  /api/v1/auth/me`
-
-### 2. 系统接口
-- `GET  /api/v1/system/info`
-- `GET  /api/v1/system/status`
-- `POST /api/v1/system/start`
-- `POST /api/v1/system/stop`
-- `POST /api/v1/system/reload`
-- `GET  /api/v1/system/logs`
-
-### 3. 配置源接口
-- `GET    /api/v1/sources`
-- `POST   /api/v1/sources/subscription`
-- `POST   /api/v1/sources/upload`
-- `POST   /api/v1/sources/manual`
-- `PUT    /api/v1/sources/:id`
-- `DELETE /api/v1/sources/:id`
-- `POST   /api/v1/sources/:id/sync`
-- `POST   /api/v1/sources/:id/activate`
-
-### 4. 配置接口
-- `GET  /api/v1/config/current`
-- `POST /api/v1/config/validate`
-- `POST /api/v1/config/render`
-- `POST /api/v1/config/apply`
-- `GET  /api/v1/config/revisions`
-- `POST /api/v1/config/revisions/:id/rollback`
-
-### 5. 自动代理接口
-- `GET  /api/v1/policy`
-- `PUT  /api/v1/policy`
-- `POST /api/v1/policy/test`
-
-### 6. 代理接口
-- `GET  /api/v1/proxies`
-- `GET  /api/v1/proxies/groups`
-- `POST /api/v1/proxies/groups/:group/select`
-- `POST /api/v1/proxies/groups/:group/delay`
-
-## 九、自动代理策略设计
-
-这是本项目最核心的增强点。
-
-### 1. 前端只暴露四种模式
-
-- 手动模式
-- 最快优先
-- 故障转移
-- 负载均衡
-
-### 2. 后端自动映射为 mihomo 代理组
-
-#### 手动模式
-
-生成：
-```yaml
-- name: 自动选择
-  type: select
-  proxies:
-    - 节点A
-    - 节点B
-```
-
-#### 最快优先
-
-生成：
-```yaml
-- name: 自动选择
-  type: url-test
-  proxies:
-    - 节点A
-    - 节点B
-  url: https://www.gstatic.com/generate_204
-  interval: 300
-  tolerance: 50
-```
-
-#### 故障转移
-
-生成：
-```yaml
-- name: 自动选择
-  type: fallback
-  proxies:
-    - 节点A
-    - 节点B
-  url: https://www.gstatic.com/generate_204
-  interval: 300
-```
-
-#### 负载均衡
-
-生成：
-```yaml
-- name: 自动选择
-  type: load-balance
-  strategy: consistent-hashing
-  proxies:
-    - 节点A
-    - 节点B
-  url: https://www.gstatic.com/generate_204
-  interval: 300
-```
-
-### 3. 智能增强规则
-
-后端可以额外增加一些简单规则：
-- 节点数 < 3 时不生成复杂组
-- 节点数 > 20 时自动按区域生成子组
-- 用户选"稳定优先"时默认 fallback
-- 用户选"速度优先"时默认 url-test
-
-### 4. 区域分组
-
-按节点名关键词自动识别：
-- HK / Hong Kong
-- JP / Japan
-- SG / Singapore
-- US / America
-
-然后生成：
-- 自动选择-香港
-- 自动选择-日本
-- 自动选择-亚洲
-- 自动选择-全部
-
-## 十、配置渲染流程
-
-为了避免用户直接修改最终运行 YAML，采用"源配置 + 渲染"的方式。
-
-### 处理流程
-
-```
-订阅 / 上传 / 粘贴配置
--> 解析 YAML
--> 校验基本字段
--> 提取 proxies / proxy-providers / rules
--> 注入默认 external-controller / secret / mixed-port / dns
--> 注入自动代理组
--> 生成 runtime.yaml
--> 存储 revision
--> 调用 mihomo reload
-```
-
-### 关键设计
-
-- 原始 source 永远保留
-- runtime.yaml 永远由系统生成
-- 前端编辑的是业务配置，不是最终文件
-- 应用配置前必须先校验
-
-## 十一、mihomo 集成方式
-
-### 1. 运行模型
-
-- proxyd 为主服务
-- mihomo 为被管理子进程
-- proxyd 管理其启动、重载、停止
-
-### 2. 接口封装
-
-```go
-type CoreManager interface {
-    Start(ctx context.Context, configPath string) error
-    Stop(ctx context.Context) error
-    Reload(ctx context.Context, configPath string) error
-    Version(ctx context.Context) (string, error)
-    Health(ctx context.Context) error
-}
-```
-
-### 3. 配置要求
-
-默认向 mihomo 注入：
-```yaml
-external-controller: 127.0.0.1:9090
-secret: <random>
-allow-lan: false
-```
-
-external-ui 不启用，日志级别与端口按系统配置生成。
-
-## 十二、前端页面方案
-
-### 1. 登录页
-
-**字段**：
-- 用户名
-- 密码
-
-**功能**：
-- 登录
-- 保存 token
-
-### 2. 仪表盘
-
-**显示**：
-- mihomo 运行状态
-- 当前配置源
-- 当前自动模式
-- 最近一次同步时间
-- 最近一次重载时间
-- 当前主代理组状态
-
-### 3. 订阅页
-
-**功能**：
-- 新增订阅 URL
-- 查看订阅列表
-- 启用/禁用
-- 手动更新
-- 删除
-
-### 4. 配置页
-
-**功能**：
-- 上传 YAML
-- 粘贴 YAML
-- 配置自动模式
-- 配置测速 URL
-- 配置检测周期
-- 预览最终渲染配置
-- 应用配置
-
-### 5. 代理页
-
-**功能**：
-- 查看代理组
-- 查看当前节点
-- 手动切换
-- 手动测速
-
-## 十三、安全方案
-
-### 1. 网络隔离
-
-- mihomo external-controller 只监听 127.0.0.1
-- 前端只访问 Gin API
-- 不暴露 mihomo 原生控制口到公网
-
-### 2. 鉴权
-
-- 简单单用户登录
-- JWT 或服务端 Session
-- 所有写操作要求鉴权
-
-### 3. 输入控制
-
-- 订阅下载限制大小
-- HTTP 拉取设置超时
-- YAML 校验失败禁止应用
-- 文件上传限制后缀与大小
-
-### 4. 审计
-
-记录：
-- 登录
-- 订阅更新
-- 配置应用
-- 节点切换
-- 重载与回滚
-
-## 十四、部署方案
-
-### 1. 文件布局
-
-```
-/usr/local/bin/proxyd
-/usr/local/bin/mihomo
-/etc/proxyd/config.yaml
-/var/lib/proxyd/proxyd.db
-/var/lib/proxyd/generated/runtime.yaml
-/var/log/proxyd/
-```
-
-### 2. systemd 服务
-
-```ini
-[Unit]
-Description=Proxyd Service
-After=network-online.target
-Wants=network-online.target
-
-[Service]
-Type=simple
-ExecStart=/usr/local/bin/proxyd -c /etc/proxyd/config.yaml
-Restart=always
-RestartSec=3
-User=root
-WorkingDirectory=/var/lib/proxyd
-
-[Install]
-WantedBy=multi-user.target
-```
-
-## 十五、配置示例
-
-### proxyd 自身配置
+### 配置文件说明
 
 ```yaml
 server:
-  listen: 0.0.0.0:8080
-  token_secret: change-me
+  host: "0.0.0.0"
+  port: 8080
 
-storage:
-  sqlite_path: /var/lib/proxyd/proxyd.db
+database:
+  path: "data/db/proxyd.db"
 
-core:
-  binary_path: /usr/local/bin/mihomo
-  work_dir: /var/lib/proxyd/generated
-  api_addr: 127.0.0.1:9090
-  api_secret: random-secret
-  log_level: info
+mihomo:
+  binary_path: ""          # 留空则使用与 proxyd 同目录的 mihomo
+  config_dir: "data/mihomo"
+  api_port: 9090
+  auto_update_enabled: false
 
-subscription:
-  timeout_sec: 20
-  max_size_mb: 10
+auth:
+  jwt_secret: "your-secret-key-change-me"   # 生产环境必须修改
+  session_timeout: 86400
 
-policy:
-  default_mode: url-test
-  default_test_url: https://www.gstatic.com/generate_204
-  default_interval_sec: 300
-  default_tolerance_ms: 50
+logging:
+  level: "info"
+  output: "stdout"
 ```
 
-## 十六、开发阶段规划
+完整配置见 [config.example.yaml](config.example.yaml)。
 
-### 第一阶段：骨架打通
-- Gin API 框架
-- SQLite 初始化
-- 配置源 CRUD
-- mihomo 启停
-- runtime.yaml 生成
-- 前端基础页面
+### API 概览
 
-### 第二阶段：核心可用
-- 订阅同步
-- 应用配置
-- 代理组查询
-- 手动切换
-- 自动代理模式切换
+所有接口以 `/api/v1` 为前缀，除 `/health`、`/ping`、`/auth/login` 和 `/system/ws` 外均需 JWT。
 
-### 第三阶段：增强稳定性
-- 配置版本
-- 回滚
-- 节点分组
-- 延迟测试缓存
-- 错误处理与审计
+| 模块 | 主要路由 |
+|------|---------|
+| 认证 | `POST /auth/login` · `POST /auth/logout` · `PUT /auth/password` |
+| 系统 | `GET /system/info` · `GET /system/ws`（WebSocket） |
+| 订阅源 | `GET/POST /sources` · `POST /sources/:id/fetch` |
+| 配置 | `POST /config/generate` · `POST /config/apply` · `POST /config/quick-apply` |
+| 版本 | `GET /config/revisions` · `POST /config/revisions/:id/rollback` |
+| 代理 | `GET /proxy/proxies` · `POST /proxy/proxies/:name/test` · `PUT /proxy/groups/:group` |
+| mihomo | `POST /proxy/mihomo/start\|stop\|restart` |
 
-## 十七、项目结论
+### 部署
 
-这个方案最合适的产品定位是：
+```bash
+# 复制二进制和配置
+sudo cp build/proxyd /usr/local/bin/proxyd
+sudo mkdir -p /etc/proxyd /var/lib/proxyd /var/log/proxyd
+sudo cp config.yaml /etc/proxyd/config.yaml
 
-**"面向 Ubuntu Server 的轻量 mihomo 管理面板"**
+# 安装 systemd 服务
+sudo cp deployments/systemd/proxyd.service /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable --now proxyd
+```
 
-它不是桌面客户端，也不是全功能控制台，而是一个围绕以下四个核心能力展开的系统：
+详细部署指南见 [docs/deployment.md](docs/deployment.md)。
 
-1. 订阅管理
-2. 配置文件管理
-3. 自动代理选择
-4. 基础运行控制
+### 开发测试
 
-从技术上看，这个方案是成立的，因为：
-- mihomo 已经提供了 REST 控制与代理组机制
-- Gin 适合快速搭建高性能 API
-- SQLite 足够支撑单机版管理程序，但 Go 接 SQLite 时要考虑 CGO 构建条件
-- Vue 3 + Vite 很适合做这种体量不大的管理前端
+```bash
+# 单元测试
+go test ./...
+
+# 单个包测试
+go test ./internal/store/... -run TestSourceStore
+
+# 验收测试（需先启动 proxyd）
+PROXYD_PASSWORD=admin ./scripts/acceptance.sh
+```
+
+### 运行时目录结构
+
+```
+data/
+  db/proxyd.db          # SQLite 数据库
+  mihomo/               # mihomo 配置及运行文件
+logs/                   # 应用日志和 mihomo 日志
+```
+
+---
+
+<a name="english"></a>
+
+## 🇺🇸 English
+
+### Overview
+
+Clash Proxyd is a lightweight management panel for mihomo (Clash Meta) designed to run on Ubuntu Server. It provides subscription management, configuration versioning, proxy node switching, and real-time traffic monitoring — all through an embedded Web UI.
+
+### Features
+
+- **Subscription management**: HTTP/local subscriptions, one-click Fetch & Apply, 3-column card grid with active-profile indicator
+- **Config versioning**: Every apply creates a revision snapshot; view content and rollback with one click
+- **Proxy management**: Two-panel layout (group list + node card grid), click a node to switch, built-in latency tester
+- **Real-time monitoring**: Dashboard receives traffic data via WebSocket; 2-minute rolling speed chart
+- **mihomo lifecycle**: Auto-detect, start, stop, restart mihomo process; supports binary auto-update
+- **Scheduled refresh**: Configurable automatic subscription update intervals
+- **JWT auth**: All APIs protected by JWT; supports password change and token refresh
+
+### Architecture
+
+```
+mihomo (proxy engine)  ←  proxyd (Go control plane)  ←  Vue 3 Web UI
+```
+
+| Layer | Responsibility |
+|-------|----------------|
+| mihomo | Proxy protocols, DNS, routing rules, proxy group execution |
+| proxyd | Subscription fetching, config parsing/merge, process management, API, SQLite |
+| Web UI | Browser interface, communicates with proxyd via `/api/v1` |
+
+### Quick Start
+
+#### Prerequisites
+
+- Go 1.22+
+- Node.js 20+
+- SQLite3 (CGO dependency)
+- mihomo binary (can be auto-downloaded from the Web UI)
+
+#### Build
+
+```bash
+git clone https://github.com/bkcarlos/clash_proxyd.git
+cd clash_proxyd
+
+# Install frontend dependencies
+npm --prefix web-ui install
+
+# Full build (frontend + backend with embedded Web UI)
+make build-all
+
+# Backend only
+make build-backend
+
+# Frontend only
+make build-frontend
+```
+
+#### Initialize and Run
+
+```bash
+# Copy config
+cp config.example.yaml config.yaml
+
+# Initialize database
+./build/proxyd -c config.yaml -init-db
+
+# Start with embedded Web UI
+./build/proxyd -c config.yaml -web
+```
+
+Open `http://localhost:8080`. Default credentials: `admin` / `admin` — **change the password after first login**.
+
+#### Development Mode
+
+```bash
+# Terminal 1: backend with auto-rebuild
+make dev-backend
+
+# Terminal 2: frontend dev server (HMR on port 5173)
+make dev-frontend
+```
+
+### Configuration
+
+```yaml
+server:
+  host: "0.0.0.0"
+  port: 8080
+
+database:
+  path: "data/db/proxyd.db"
+
+mihomo:
+  binary_path: ""          # empty = use mihomo alongside proxyd binary
+  config_dir: "data/mihomo"
+  api_port: 9090
+  auto_update_enabled: false
+
+auth:
+  jwt_secret: "your-secret-key-change-me"   # MUST change in production
+  session_timeout: 86400
+
+logging:
+  level: "info"
+  output: "stdout"
+```
+
+See [config.example.yaml](config.example.yaml) for the full reference.
+
+### API Overview
+
+All routes are prefixed with `/api/v1`. JWT is required except for `/health`, `/ping`, `/auth/login`, and `/system/ws`.
+
+| Module | Key Routes |
+|--------|-----------|
+| Auth | `POST /auth/login` · `POST /auth/logout` · `PUT /auth/password` |
+| System | `GET /system/info` · `GET /system/ws` (WebSocket) |
+| Sources | `GET/POST /sources` · `POST /sources/:id/fetch` |
+| Config | `POST /config/generate` · `POST /config/apply` · `POST /config/quick-apply` |
+| Revisions | `GET /config/revisions` · `POST /config/revisions/:id/rollback` |
+| Proxies | `GET /proxy/proxies` · `POST /proxy/proxies/:name/test` · `PUT /proxy/groups/:group` |
+| mihomo | `POST /proxy/mihomo/start\|stop\|restart` |
+
+### Deployment
+
+```bash
+# Copy binary and config
+sudo cp build/proxyd /usr/local/bin/proxyd
+sudo mkdir -p /etc/proxyd /var/lib/proxyd /var/log/proxyd
+sudo cp config.yaml /etc/proxyd/config.yaml
+
+# Install systemd service
+sudo cp deployments/systemd/proxyd.service /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable --now proxyd
+```
+
+See [docs/deployment.md](docs/deployment.md) for the full deployment guide.
+
+### Testing
+
+```bash
+# Unit tests
+go test ./...
+
+# Single package
+go test ./internal/store/... -run TestSourceStore
+
+# Acceptance tests (requires running proxyd)
+PROXYD_PASSWORD=admin ./scripts/acceptance.sh
+```
+
+### Runtime Layout
+
+```
+data/
+  db/proxyd.db          # SQLite database
+  mihomo/               # mihomo config and runtime files
+logs/                   # Application and mihomo logs
+```
+
+### License
+
+[MIT](LICENSE)
