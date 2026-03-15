@@ -216,7 +216,7 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted, onUnmounted, computed, ref } from 'vue'
+import { onMounted, onUnmounted, computed, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import { useSystemStore } from '@/stores/system'
 import { useSourceStore } from '@/stores/source'
@@ -417,8 +417,6 @@ const refreshSystem = async () => {
 }
 
 
-let speedTimer: ReturnType<typeof setInterval> | null = null
-
 onMounted(async () => {
   await Promise.allSettled([
     systemStore.fetchInfo(),
@@ -429,16 +427,15 @@ onMounted(async () => {
     fetchVersion(),
   ])
   systemStore.connectWS()
-  // Poll traffic every second to compute rates
-  speedTimer = setInterval(async () => {
-    await proxyStore.fetchTraffic(true)
-    tickTraffic()
-  }, 1000)
+  // Seed the chart with the initial traffic snapshot
+  tickTraffic()
 })
+
+// Drive the speed chart from WS-pushed traffic (via proxyStore.traffic)
+watch(() => proxyStore.traffic, () => tickTraffic(), { deep: true })
 
 onUnmounted(() => {
   systemStore.disconnectWS()
-  if (speedTimer) clearInterval(speedTimer)
 })
 </script>
 
