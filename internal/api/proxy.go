@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/clash-proxyd/proxyd/internal/core"
@@ -80,6 +81,19 @@ func (h *Handler) TestProxy(c *gin.Context) {
 
 	delay, err := h.mihomoManager.GetProxyDelay(name, testURL, timeoutInt)
 	if err != nil {
+		// "request failed with status NNN" means mihomo responded but the
+		// proxy test itself failed (timeout, unreachable, etc.) — not a
+		// mihomo outage.  Return delay=0 with an error field instead of 503.
+		if strings.Contains(err.Error(), "request failed with status") {
+			h.respondJSON(c, http.StatusOK, gin.H{
+				"name":    name,
+				"delay":   0,
+				"url":     testURL,
+				"timeout": timeoutInt,
+				"error":   err.Error(),
+			})
+			return
+		}
 		h.mihomoUnavailable(c, err)
 		return
 	}
