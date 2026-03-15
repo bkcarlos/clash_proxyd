@@ -205,7 +205,7 @@ func (c *Client) doRequest(method, path string, body, result interface{}) error 
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode != http.StatusOK {
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		body, _ := io.ReadAll(resp.Body)
 		return fmt.Errorf("request failed with status %d: %s", resp.StatusCode, string(body))
 	}
