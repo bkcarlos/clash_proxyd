@@ -257,16 +257,19 @@ const timeAxisLabels = computed(() =>
 const upRate = computed(() => upHistory.value[upHistory.value.length - 1] ?? 0)
 const downRate = computed(() => downHistory.value[downHistory.value.length - 1] ?? 0)
 
-// Use a minimum scale so lines are always visible even at 0
-const chartMax = computed(() =>
-  Math.max(...upHistory.value, ...downHistory.value, 1024) // at least 1KB/s scale
-)
+// Dynamic scale: use the last 30 samples (30s) so the chart adapts quickly
+// after a big download ends. Clamp ratio to 1 so older spikes don't go off-chart.
+const SCALE_WINDOW = 30
+const chartMax = computed(() => {
+  const tail = (arr: number[]) => arr.slice(-SCALE_WINDOW)
+  return Math.max(...tail(upHistory.value), ...tail(downHistory.value), 1024)
+})
 
 const toPoints = (data: number[], maxVal: number) => {
   const pad = 6 // vertical padding so lines don't touch top/bottom edge
   return data.map((v, i) => {
     const x = (i / (HISTORY - 1)) * chartW
-    const ratio = maxVal > 0 ? v / maxVal : 0
+    const ratio = maxVal > 0 ? Math.min(v / maxVal, 1) : 0
     const y = chartH - pad - ratio * (chartH - pad * 2)
     return `${x.toFixed(1)},${y.toFixed(1)}`
   }).join(' ')

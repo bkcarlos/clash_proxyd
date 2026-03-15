@@ -135,9 +135,13 @@ const fetchConnections = async () => {
     const data: any = await request({ url: '/proxy/connections', method: 'GET' })
     connections.value = data?.connections ?? []
     mihomoRunning.value = true
-  } catch {
-    mihomoRunning.value = false
-    connections.value = []
+  } catch (err: any) {
+    if (err?.response?.status === 503) {
+      // mihomo not running — expected state, don't spam errors
+      mihomoRunning.value = false
+      connections.value = []
+    }
+    // other errors: keep last known state
   }
 }
 

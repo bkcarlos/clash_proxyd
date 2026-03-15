@@ -45,9 +45,9 @@ request.interceptors.response.use(
 
     if (error.response?.status === 403) {
       ElMessage.error('Access denied')
-    } else if (error.response?.status >= 500) {
+    } else if (error.response?.status >= 500 && error.response?.status !== 503) {
       ElMessage.error('Server error')
-    } else if (error.response?.status !== 401) {
+    } else if (error.response?.status !== 401 && error.response?.status !== 503) {
       ElMessage.error(message)
     }
 
