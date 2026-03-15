@@ -54,7 +54,7 @@ func (h *Handler) TestProxy(c *gin.Context) {
 
 	testURL := c.DefaultQuery("url", req.URL)
 	if testURL == "" {
-		testURL = "http://www.gstatic.com/generate_204"
+		testURL = "http://cp.cloudflare.com/generate_204"
 	}
 
 	timeoutInt := req.Timeout
