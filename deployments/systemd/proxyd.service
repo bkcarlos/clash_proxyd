@@ -1,24 +1,40 @@
 [Unit]
 Description=Proxyd - Mihomo Proxy Manager
-After=network.target
+Documentation=https://github.com/clash-proxyd/proxyd
+After=network-online.target
+Wants=network-online.target
 
 [Service]
 Type=simple
-User=www-data
-Group=www-data
+User=proxyd
+Group=proxyd
 WorkingDirectory=/opt/proxyd
-ExecStart=/opt/proxyd/bin/proxyd -c /opt/proxyd/config.yaml
-Restart=on-failure
-RestartSec=5s
 
-# Security
+# Optional: override config via environment file (e.g. set PROXYD_LOGLEVEL=debug)
+EnvironmentFile=-/opt/proxyd/proxyd.env
+
+ExecStart=/opt/proxyd/bin/proxyd -c /opt/proxyd/config.yaml
+
+# Restart policy
+Restart=always
+RestartSec=3s
+
+# Graceful shutdown timeout
+TimeoutStopSec=15s
+
+# File descriptor limit — needed for proxy workloads
+LimitNOFILE=65535
+
+# ── Hardening ──────────────────────────────────────────────────────────────
 NoNewPrivileges=true
 PrivateTmp=true
 ProtectSystem=strict
 ProtectHome=true
-ReadWritePaths=/opt/proxyd/data /opt/proxyd/logs /var/run
 
-# Logging
+# Writable paths: data, logs, mihomo config dir
+ReadWritePaths=/opt/proxyd/data /opt/proxyd/logs
+
+# ── Logging ────────────────────────────────────────────────────────────────
 StandardOutput=journal
 StandardError=journal
 SyslogIdentifier=proxyd

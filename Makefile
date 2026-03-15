@@ -1,4 +1,4 @@
-.PHONY: all build build-backend build-frontend install clean test run dev-backend dev-frontend init-db install-service uninstall-service docker-build docker-run mihomo-start mihomo-stop mihomo-restart mihomo-status help
+.PHONY: all build build-backend build-frontend install deploy install-service uninstall-service clean test run dev-backend dev-frontend init-db docker-build docker-run mihomo-start mihomo-stop mihomo-restart mihomo-status help
 
 # Variables
 BINARY_NAME=proxyd
@@ -6,6 +6,7 @@ BUILD_DIR=build
 CMD_DIR=cmd/proxyd
 WEB_UI_DIR=web-ui
 PREFIX=/opt/proxyd
+SERVICE_USER=proxyd
 
 # Go parameters
 GOCMD=go
@@ -64,19 +65,24 @@ embed-frontend:
 	rm -rf internal/webui/dist
 	cp -r $(WEB_UI_DIR)/dist internal/webui/dist
 
-## install: Install proxyd to system
+## install: Install binary + config to PREFIX (default /opt/proxyd), no service setup
 install: build
 	install -d $(PREFIX)/bin
 	install -d $(PREFIX)/data/db
+	install -d $(PREFIX)/data/mihomo
+	install -d $(PREFIX)/data/generated
+	install -d $(PREFIX)/data/cache
 	install -d $(PREFIX)/logs
-	install -d $(PREFIX)/web-ui
 	install -m 755 $(BUILD_DIR)/$(BINARY_NAME) $(PREFIX)/bin/
-	cp -r $(WEB_UI_DIR)/dist/* $(PREFIX)/web-ui/
 	@if [ ! -f $(PREFIX)/config.yaml ]; then \
 		cp config.example.yaml $(PREFIX)/config.yaml; \
 		echo "Installed config.example.yaml to $(PREFIX)/config.yaml"; \
 		echo "Please edit it before running proxyd"; \
 	fi
+
+## deploy: Full one-step deploy: build + install binary + set up systemd service (requires root)
+deploy: build-all
+	sudo INSTALL_DIR=$(PREFIX) scripts/install.sh $(BUILD_DIR)/$(BINARY_NAME)
 
 ## clean: Clean build artifacts
 clean:
@@ -109,21 +115,29 @@ dev-frontend:
 init-db:
 	$(BUILD_DIR)/$(BINARY_NAME) -c config.example.yaml -init-db
 
-## install-service: Install systemd service
+## install-service: Install (or update) only the systemd unit file; requires root
 install-service:
 	@echo "Installing systemd service..."
-	@sed "s|/opt/proxyd|$(PREFIX)|g" deployments/systemd/proxyd.service > /tmp/proxyd.service
-	install -m 644 /tmp/proxyd.service /etc/systemd/system/
+	@sed \
+		-e "s|/opt/proxyd|$(PREFIX)|g" \
+		-e "s|User=proxyd|User=$(SERVICE_USER)|g" \
+		-e "s|Group=proxyd|Group=$(SERVICE_USER)|g" \
+		deployments/systemd/proxyd.service \
+		> /tmp/proxyd.service
+	install -m 644 /tmp/proxyd.service /etc/systemd/system/proxyd.service
+	rm /tmp/proxyd.service
 	systemctl daemon-reload
-	@echo "Service installed. Enable with: systemctl enable proxyd"
-	@echo "Start with: systemctl start proxyd"
+	@echo "Service file installed: /etc/systemd/system/proxyd.service"
+	@echo "Enable:  systemctl enable proxyd"
+	@echo "Start:   systemctl start proxyd"
 
-## uninstall-service: Uninstall systemd service
+## uninstall-service: Stop, disable, and remove the systemd unit file
 uninstall-service:
-	systemctl stop proxyd || true
+	systemctl stop proxyd    || true
 	systemctl disable proxyd || true
 	rm -f /etc/systemd/system/proxyd.service
 	systemctl daemon-reload
+	@echo "Service removed."
 
 ## docker-build: Build Docker image
 docker-build:
