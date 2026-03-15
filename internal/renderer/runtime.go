@@ -72,7 +72,9 @@ func (r *Renderer) RenderToFile(sources []map[string]interface{}, path string) e
 func (r *Renderer) applyPolicy(config map[string]interface{}) {
 	// Apply basic settings
 	if r.policyCfg.MixedPort > 0 {
-		config["port"] = r.policyCfg.MixedPort
+		config["mixed-port"] = r.policyCfg.MixedPort
+		delete(config, "port")       // Remove conflicting port config
+		delete(config, "socks-port") // Remove conflicting socks-port config
 	}
 	if r.policyCfg.AllowLan {
 		config["allow-lan"] = true
