@@ -150,8 +150,8 @@
           <span v-for="label in timeAxisLabels" :key="label">{{ label }}</span>
         </div>
         <div class="chart-labels">
-          <span style="color:#5865f2">↑ {{ formatBytes(proxyStore.traffic.up) }} total</span>
-          <span style="color:#22d3ee">↓ {{ formatBytes(proxyStore.traffic.down) }} total</span>
+          <span style="color:#5865f2">↑ {{ formatBytes(proxyStore.traffic.upTotal) }} total</span>
+          <span style="color:#22d3ee">↓ {{ formatBytes(proxyStore.traffic.downTotal) }} total</span>
         </div>
       </div>
     </el-card>
@@ -239,7 +239,6 @@ const chartW = 340
 const chartH = 100
 const upHistory = ref<number[]>(Array(HISTORY).fill(0))
 const downHistory = ref<number[]>(Array(HISTORY).fill(0))
-let prevUp = 0, prevDown = 0, prevTs = 0
 const nowTs = ref(Date.now())
 
 // 5 evenly-spaced time labels across the 2-minute window
@@ -290,17 +289,12 @@ const formatRate = (bps: number) => {
 }
 
 const tickTraffic = () => {
-  const now = Date.now()
-  nowTs.value = now
+  nowTs.value = Date.now()
+  // mihomo /traffic already returns instantaneous rates (bytes/s);
+  // push them directly — no delta calculation needed.
   const { up, down } = proxyStore.traffic
-  if (prevTs > 0) {
-    const dt = (now - prevTs) / 1000
-    const upR = Math.max(0, Math.round((up - prevUp) / dt))
-    const downR = Math.max(0, Math.round((down - prevDown) / dt))
-    upHistory.value = [...upHistory.value.slice(1), upR]
-    downHistory.value = [...downHistory.value.slice(1), downR]
-  }
-  prevUp = up; prevDown = down; prevTs = now
+  upHistory.value = [...upHistory.value.slice(1), Math.max(0, up)]
+  downHistory.value = [...downHistory.value.slice(1), Math.max(0, down)]
 }
 
 const mihomoRunning = computed(() => systemStore.info?.mihomo_status === 'running')
