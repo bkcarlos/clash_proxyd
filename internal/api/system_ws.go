@@ -67,7 +67,7 @@ func (h *Handler) SystemWS(c *gin.Context) {
 		}
 	}()
 
-	ticker := time.NewTicker(3 * time.Second)
+	ticker := time.NewTicker(1 * time.Second)
 	pingTicker := time.NewTicker(15 * time.Second)
 	defer ticker.Stop()
 	defer pingTicker.Stop()
@@ -100,9 +100,12 @@ func (h *Handler) writeSnapshot(conn *websocket.Conn) {
 
 func (h *Handler) buildWSSnapshot() wsSnapshot {
 	status := map[string]interface{}{"mihomo_status": "unknown"}
-	if runtimeState, err := h.runtimeStore.Get(); err == nil {
-		status["mihomo_status"] = runtimeState.Status
-		status["mihomo_pid"] = runtimeState.PID
+	if h.mihomoManager.IsRunning() {
+		status["mihomo_status"] = "running"
+		status["mihomo_pid"] = h.mihomoManager.GetPID()
+	} else {
+		status["mihomo_status"] = "stopped"
+		status["mihomo_pid"] = 0
 	}
 
 	if action, details, ts, ok := lastAutoUpdateSummary(h.auditStore); ok {

@@ -106,6 +106,15 @@ export const useProxyStore = defineStore('proxy', () => {
     return trafficInflight
   }
 
+  const applyTraffic = (data: any): void => {
+    traffic.value = {
+      up: data.up ?? 0,
+      down: data.down ?? 0,
+      upTotal: data.upTotal ?? 0,
+      downTotal: data.downTotal ?? 0,
+    }
+  }
+
   const testProxy = async (name: string, url?: string): Promise<{ delay: number; from_cache?: boolean }> => {
     try {
       return await proxyApi.testProxy(name, url)
@@ -146,6 +155,7 @@ export const useProxyStore = defineStore('proxy', () => {
     fetchProxies,
     fetchRules,
     fetchTraffic,
+    applyTraffic,
     testProxy,
     switchProxy,
     controlMihomo

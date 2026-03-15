@@ -1,6 +1,7 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
 import * as systemApi from '@/api/system'
+import { useProxyStore } from '@/stores/proxy'
 
 export type SystemInfo = systemApi.SystemInfo
 export type SystemStatus = systemApi.SystemStatus
@@ -145,6 +146,10 @@ export const useSystemStore = defineStore('system', () => {
         const payload = JSON.parse(evt.data)
         if (payload?.type === 'snapshot') {
           applySnapshot(payload)
+          if (payload.traffic) {
+            const proxyStore = useProxyStore()
+            proxyStore.applyTraffic(payload.traffic)
+          }
         }
       } catch {
         // ignore invalid payload
