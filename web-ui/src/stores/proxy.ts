@@ -115,12 +115,12 @@ export const useProxyStore = defineStore('proxy', () => {
     }
   }
 
-  const testProxy = async (name: string, url?: string): Promise<{ delay: number; from_cache?: boolean }> => {
+  const testProxy = async (name: string, url?: string): Promise<proxyApi.ProxyDelayResult> => {
     try {
       return await proxyApi.testProxy(name, url)
-    } catch (err) {
-      error.value = err instanceof Error ? err.message : 'Failed to test proxy'
-      throw err
+    } catch (err: any) {
+      // 503 = mihomo not running; other errors — return delay:0 with error, don't throw
+      return { delay: 0, error: err?.message || 'Test failed' }
     }
   }
 
