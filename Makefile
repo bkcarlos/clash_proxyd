@@ -120,8 +120,7 @@ install-service:
 	@echo "Installing systemd service..."
 	@sed \
 		-e "s|/opt/proxyd|$(PREFIX)|g" \
-		-e "s|User=proxyd|User=$(SERVICE_USER)|g" \
-		-e "s|Group=proxyd|Group=$(SERVICE_USER)|g" \
+		-e "s|User=nobody|User=$(SERVICE_USER)|g" \
 		deployments/systemd/proxyd.service \
 		> /tmp/proxyd.service
 	install -m 644 /tmp/proxyd.service /etc/systemd/system/proxyd.service
