@@ -184,8 +184,7 @@ TEMPLATE="$REPO_ROOT/deployments/systemd/proxyd.service"
 if [[ -f "$TEMPLATE" ]]; then
     sed \
         -e "s|/opt/proxyd|${INSTALL_DIR}|g" \
-        -e "s|User=proxyd|User=${SERVICE_USER}|g" \
-        -e "s|Group=proxyd|Group=${SERVICE_GROUP}|g" \
+        -e "s|User=nobody|User=${SERVICE_USER}|g" \
         "$TEMPLATE" > "$SERVICE_FILE"
 else
     # Inline fallback if template not available (e.g. binary-only install)
@@ -198,7 +197,6 @@ Wants=network-online.target
 [Service]
 Type=simple
 User=${SERVICE_USER}
-Group=${SERVICE_GROUP}
 WorkingDirectory=${INSTALL_DIR}
 EnvironmentFile=-${INSTALL_DIR}/proxyd.env
 ExecStart=${INSTALL_DIR}/bin/proxyd -c ${INSTALL_DIR}/config.yaml
