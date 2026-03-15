@@ -8,11 +8,11 @@
         </span>
         <span class="stat">
           <el-icon><Top /></el-icon>
-          {{ formatBytes(totalUp) }}/s
+          ↑ {{ formatBytes(totalUp) }}
         </span>
         <span class="stat">
           <el-icon><Bottom /></el-icon>
-          {{ formatBytes(totalDown) }}/s
+          ↓ {{ formatBytes(totalDown) }}
         </span>
       </div>
       <div style="display:flex;gap:8px">

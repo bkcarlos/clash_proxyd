@@ -84,8 +84,10 @@ type MihomoConfig struct {
 
 // MihomoTraffic represents mihomo traffic statistics
 type MihomoTraffic struct {
-	Up   int `json:"up"`
-	Down int `json:"down"`
+	Up      int `json:"up"`
+	Down    int `json:"down"`
+	UpTotal int `json:"upTotal"`
+	DownTotal int `json:"downTotal"`
 }
 
 // MihomoMemory represents mihomo memory usage

@@ -12,7 +12,7 @@ export const useProxyStore = defineStore('proxy', () => {
   const proxies = ref<Record<string, any>>({})
   const groups = ref<any[]>([])
   const rules = ref<any[]>([])
-  const traffic = ref({ up: 0, down: 0 })
+  const traffic = ref({ up: 0, down: 0, upTotal: 0, downTotal: 0 })
   const loading = ref(false)
   const error = ref<string | null>(null)
 
@@ -84,8 +84,13 @@ export const useProxyStore = defineStore('proxy', () => {
 
     trafficInflight = (async () => {
       try {
-        const data = await proxyApi.getTraffic()
-        traffic.value = data
+        const data: any = await proxyApi.getTraffic()
+        traffic.value = {
+          up: data.up ?? 0,
+          down: data.down ?? 0,
+          upTotal: data.upTotal ?? 0,
+          downTotal: data.downTotal ?? 0,
+        }
         lastTrafficFetchAt = Date.now()
       } catch (err: any) {
         // 503 means mihomo is not running — keep last known traffic values
