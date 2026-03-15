@@ -7,7 +7,7 @@
 #
 # Environment overrides (optional):
 #   INSTALL_DIR=/opt/proxyd   Installation prefix
-#   SERVICE_USER=proxyd       System user to run the service
+#   SERVICE_USER=nobody       Existing system user to run the service
 #   API_PORT=8080             proxyd API port
 #   MIHOMO_PORT=7890          Mihomo mixed-proxy port
 
@@ -15,8 +15,9 @@ set -euo pipefail
 
 # ── Defaults ──────────────────────────────────────────────────────────────────
 INSTALL_DIR="${INSTALL_DIR:-/opt/proxyd}"
-SERVICE_USER="${SERVICE_USER:-proxyd}"
-SERVICE_GROUP="${SERVICE_GROUP:-proxyd}"
+SERVICE_USER="${SERVICE_USER:-nobody}"
+# Resolve the primary group of SERVICE_USER (nogroup on Debian, nobody on RHEL)
+SERVICE_GROUP="${SERVICE_GROUP:-$(id -gn "$SERVICE_USER" 2>/dev/null || echo nobody)}"
 SERVICE_FILE="/etc/systemd/system/proxyd.service"
 API_PORT="${API_PORT:-8080}"
 MIHOMO_PORT="${MIHOMO_PORT:-7890}"
@@ -63,21 +64,12 @@ if [[ -f "$INSTALL_DIR/bin/proxyd" ]]; then
     warn "Existing installation detected at $INSTALL_DIR — upgrading."
 fi
 
-# ── System user ───────────────────────────────────────────────────────────────
-step "Setting up system user '$SERVICE_USER'"
-if ! getent group "$SERVICE_GROUP" &>/dev/null; then
-    groupadd --system "$SERVICE_GROUP"
-    info "Created group: $SERVICE_GROUP"
-fi
+# Verify the service user exists
 if ! getent passwd "$SERVICE_USER" &>/dev/null; then
-    useradd --system \
-            --gid "$SERVICE_GROUP" \
-            --no-create-home \
-            --shell /usr/sbin/nologin \
-            --comment "proxyd service account" \
-            "$SERVICE_USER"
-    info "Created user: $SERVICE_USER"
+    error "User '$SERVICE_USER' does not exist. Set SERVICE_USER to an existing account."
+    exit 1
 fi
+info "Service will run as: ${SERVICE_USER}:${SERVICE_GROUP}"
 
 # ── Directory structure ───────────────────────────────────────────────────────
 step "Creating directory structure under $INSTALL_DIR"

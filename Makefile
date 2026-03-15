@@ -6,7 +6,7 @@ BUILD_DIR=build
 CMD_DIR=cmd/proxyd
 WEB_UI_DIR=web-ui
 PREFIX=/opt/proxyd
-SERVICE_USER=proxyd
+SERVICE_USER=nobody
 
 # Go parameters
 GOCMD=go
