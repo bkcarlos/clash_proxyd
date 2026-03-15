@@ -21,7 +21,12 @@
       <el-table :data="proxyStore.groups" border stripe>
         <el-table-column prop="name" label="Name" />
         <el-table-column prop="type" label="Type" width="120" />
-        <el-table-column prop="now" label="Current" width="160" />
+        <el-table-column label="Current" width="220" show-overflow-tooltip>
+          <template #default="{ row }">
+            <el-tag v-if="row.now" size="small" type="success">{{ row.now }}</el-tag>
+            <span v-else>—</span>
+          </template>
+        </el-table-column>
         <el-table-column label="Actions" width="120">
           <template #default="{ row }">
             <el-button size="small" @click="showGroupDetail(row)">Detail</el-button>
@@ -30,27 +35,83 @@
       </el-table>
     </el-card>
 
-    <el-dialog v-model="groupDialogVisible" :title="selectedGroup?.name" width="700px">
-      <el-table :data="selectedGroup?.proxies || []" border stripe>
-        <el-table-column prop="name" label="Proxy" />
-        <el-table-column label="Delay" width="100">
+    <!-- Group detail dialog -->
+    <el-dialog v-model="groupDialogVisible" :title="selectedGroup?.name" width="740px">
+      <!-- toolbar -->
+      <div class="dialog-toolbar">
+        <div class="dialog-meta">
+          <el-tag size="small" type="info">{{ selectedGroup?.type }}</el-tag>
+          <span class="current-label">Current: <strong>{{ selectedGroup?.now || '—' }}</strong></span>
+        </div>
+        <div style="display:flex;gap:8px;align-items:center">
+          <el-input
+            v-model="proxyFilter"
+            placeholder="Filter..."
+            clearable
+            size="small"
+            style="width:160px"
+          >
+            <template #prefix><el-icon><Search /></el-icon></template>
+          </el-input>
+          <el-button
+            size="small"
+            :type="sortByDelay ? 'primary' : 'default'"
+            @click="sortByDelay = !sortByDelay"
+            title="Sort by delay"
+          >
+            <el-icon><Sort /></el-icon>
+            Delay
+          </el-button>
+          <el-button
+            size="small"
+            type="success"
+            :loading="testingAll"
+            @click="testAll"
+          >
+            Test All
+          </el-button>
+        </div>
+      </div>
+
+      <el-table :data="displayedProxies" border stripe size="small" style="margin-top:4px">
+        <el-table-column prop="name" label="Proxy" min-width="180" show-overflow-tooltip>
           <template #default="{ row }">
-            {{ row.delay ? row.delay + 'ms' : '-' }}
+            <span :class="{ 'current-proxy': row.name === selectedGroup?.now }">
+              {{ row.name }}
+            </span>
+            <el-tag v-if="row.name === selectedGroup?.now" size="small" type="success" style="margin-left:4px">✓</el-tag>
           </template>
         </el-table-column>
-        <el-table-column label="Actions" width="200">
+        <el-table-column label="Delay" width="110" align="center">
           <template #default="{ row }">
-            <el-button size="small" @click="testProxy(row)">Test</el-button>
-            <el-button size="small" type="primary" @click="switchProxy(row)">Switch</el-button>
+            <span v-if="testing[row.name]" class="delay-spin">
+              <el-icon class="is-loading"><Loading /></el-icon>
+            </span>
+            <el-tag v-else-if="row.delay === undefined" size="small" type="info">—</el-tag>
+            <el-tag v-else-if="row.delay === 0" size="small" type="danger">Timeout</el-tag>
+            <el-tag v-else :type="delayTagType(row.delay)" size="small">{{ row.delay }} ms</el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column label="Actions" width="150" align="center">
+          <template #default="{ row }">
+            <el-button size="small" :loading="!!testing[row.name]" @click="testOne(row)">Test</el-button>
+            <el-button
+              size="small"
+              type="primary"
+              :disabled="row.name === selectedGroup?.now"
+              @click="switchProxy(row)"
+            >Switch</el-button>
           </template>
         </el-table-column>
       </el-table>
 
       <template #footer>
+        <span class="footer-stat">{{ filteredProxies.length }} / {{ selectedGroup?.proxies?.length || 0 }} proxies</span>
         <el-button @click="groupDialogVisible = false">Close</el-button>
       </template>
     </el-dialog>
 
+    <!-- Mihomo control dialog -->
     <el-dialog v-model="mihomoDialogVisible" title="Mihomo Control" width="400px">
       <div class="mihomo-controls">
         <el-button type="success" @click="controlMihomo('start')">Start</el-button>
@@ -62,16 +123,49 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useProxyStore } from '@/stores/proxy'
 import { ElMessage } from 'element-plus'
-import { Refresh, Setting } from '@element-plus/icons-vue'
+import { Refresh, Setting, Search, Sort, Loading } from '@element-plus/icons-vue'
 
 const proxyStore = useProxyStore()
 
 const groupDialogVisible = ref(false)
 const mihomoDialogVisible = ref(false)
 const selectedGroup = ref<any>(null)
+const testing = ref<Record<string, boolean>>({})
+const testingAll = ref(false)
+const proxyFilter = ref('')
+const sortByDelay = ref(false)
+
+const delayTagType = (delay: number) => {
+  if (delay < 150) return 'success'
+  if (delay < 300) return 'warning'
+  return 'danger'
+}
+
+// Proxies filtered by search input
+const filteredProxies = computed<any[]>(() => {
+  const list: any[] = selectedGroup.value?.proxies || []
+  const q = proxyFilter.value.trim().toLowerCase()
+  return q ? list.filter(p => p.name.toLowerCase().includes(q)) : list
+})
+
+// After filter, optionally sort by delay
+const displayedProxies = computed<any[]>(() => {
+  if (!sortByDelay.value) return filteredProxies.value
+  return [...filteredProxies.value].sort((a, b) => {
+    // untested (undefined) goes to the bottom
+    if (a.delay === undefined && b.delay === undefined) return 0
+    if (a.delay === undefined) return 1
+    if (b.delay === undefined) return -1
+    // timeout (0) goes after real delays
+    if (a.delay === 0 && b.delay === 0) return 0
+    if (a.delay === 0) return 1
+    if (b.delay === 0) return -1
+    return a.delay - b.delay
+  })
+})
 
 const refreshProxies = async () => {
   try {
@@ -83,28 +177,63 @@ const refreshProxies = async () => {
 }
 
 const showGroupDetail = (group: any) => {
-  selectedGroup.value = group
+  // deep-copy so local delay updates don't mutate the store
+  selectedGroup.value = {
+    ...group,
+    proxies: group.proxies.map((p: any) => ({ ...p }))
+  }
+  testing.value = {}
+  proxyFilter.value = ''
+  sortByDelay.value = false
   groupDialogVisible.value = true
 }
 
-const testProxy = async (item: any) => {
+const testOne = async (item: any, silent = false): Promise<void> => {
+  if (testing.value[item.name]) return
+  testing.value[item.name] = true
   try {
     const result = await proxyStore.testProxy(item.name)
-    item.delay = result.delay
-    const suffix = result.from_cache ? ' (cached)' : ''
-    ElMessage.success(`Proxy ${item.name} delay: ${result.delay}ms${suffix}`)
-  } catch (error: any) {
-    ElMessage.error(error.message || 'Test failed')
+    if (result.error || result.delay === 0) {
+      item.delay = 0
+      if (!silent) ElMessage.warning(`${item.name}: Timeout / unreachable`)
+    } else {
+      item.delay = result.delay
+      if (!silent) {
+        const suffix = result.from_cache ? ' (cached)' : ''
+        ElMessage.success(`${item.name}: ${result.delay} ms${suffix}`)
+      }
+    }
+  } catch {
+    item.delay = 0
+    if (!silent) ElMessage.error(`${item.name}: Test failed`)
+  } finally {
+    testing.value[item.name] = false
   }
+}
+
+const testAll = async () => {
+  if (!selectedGroup.value?.proxies?.length || testingAll.value) return
+  testingAll.value = true
+  const proxies: any[] = selectedGroup.value.proxies
+  // Run in parallel, concurrency capped at 10
+  const BATCH = 10
+  for (let i = 0; i < proxies.length; i += BATCH) {
+    await Promise.allSettled(proxies.slice(i, i + BATCH).map(p => testOne(p, true)))
+  }
+  const ok = proxies.filter(p => p.delay && p.delay > 0).length
+  const timeout = proxies.length - ok
+  ElMessage.success(`Tested ${proxies.length}: ${ok} reachable, ${timeout} timeout`)
+  // Auto-sort by delay after Test All
+  sortByDelay.value = true
+  testingAll.value = false
 }
 
 const switchProxy = async (item: any) => {
   if (!selectedGroup.value?.name) return
-
   try {
     await proxyStore.switchProxy(selectedGroup.value.name, item.name)
     selectedGroup.value.now = item.name
-    ElMessage.success(`Switched ${selectedGroup.value.name} to ${item.name}`)
+    ElMessage.success(`Switched to ${item.name}`)
     await proxyStore.fetchProxies(true)
   } catch (error: any) {
     ElMessage.error(error.message || 'Switch failed')
@@ -145,6 +274,39 @@ onMounted(() => {
   margin-bottom: 20px;
 }
 
+.dialog-toolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 10px;
+}
+
+.dialog-meta {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.current-label {
+  font-size: 13px;
+  color: var(--el-text-color-secondary);
+}
+
+.current-proxy {
+  font-weight: 600;
+  color: var(--el-color-success);
+}
+
+.delay-spin {
+  color: var(--el-color-primary);
+  font-size: 16px;
+}
+
+.footer-stat {
+  margin-right: auto;
+  font-size: 12px;
+  color: var(--el-text-color-secondary);
+}
 
 .mihomo-controls {
   display: flex;
