@@ -43,16 +43,23 @@
           <el-tag size="small" type="info">{{ selectedGroup?.type }}</el-tag>
           <span class="current-label">Current: <strong>{{ selectedGroup?.now || '—' }}</strong></span>
         </div>
-        <div style="display:flex;gap:8px;align-items:center">
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
           <el-input
             v-model="proxyFilter"
-            placeholder="Filter..."
+            placeholder="Filter nodes..."
             clearable
             size="small"
-            style="width:160px"
+            style="width:150px"
           >
             <template #prefix><el-icon><Search /></el-icon></template>
           </el-input>
+          <el-input
+            v-model="testUrl"
+            placeholder="Test URL"
+            clearable
+            size="small"
+            style="width:230px"
+          />
           <el-button
             size="small"
             :type="sortByDelay ? 'primary' : 'default'"
@@ -82,13 +89,20 @@
             <el-tag v-if="row.name === selectedGroup?.now" size="small" type="success" style="margin-left:4px">✓</el-tag>
           </template>
         </el-table-column>
-        <el-table-column label="Delay" width="110" align="center">
+        <el-table-column label="Delay" width="120" align="center">
           <template #default="{ row }">
             <span v-if="testing[row.name]" class="delay-spin">
               <el-icon class="is-loading"><Loading /></el-icon>
             </span>
             <el-tag v-else-if="row.delay === undefined" size="small" type="info">—</el-tag>
-            <el-tag v-else-if="row.delay === 0" size="small" type="danger">Timeout</el-tag>
+            <el-tooltip
+              v-else-if="row.delay === 0"
+              :content="row.testErr || 'Timeout / unreachable'"
+              placement="top"
+              :show-after="300"
+            >
+              <el-tag size="small" type="danger" style="cursor:help">Timeout ⓘ</el-tag>
+            </el-tooltip>
             <el-tag v-else :type="delayTagType(row.delay)" size="small">{{ row.delay }} ms</el-tag>
           </template>
         </el-table-column>
@@ -137,6 +151,7 @@ const testing = ref<Record<string, boolean>>({})
 const testingAll = ref(false)
 const proxyFilter = ref('')
 const sortByDelay = ref(false)
+const testUrl = ref('http://cp.cloudflare.com/generate_204')
 
 const delayTagType = (delay: number) => {
   if (delay < 150) return 'success'
@@ -185,6 +200,7 @@ const showGroupDetail = (group: any) => {
   testing.value = {}
   proxyFilter.value = ''
   sortByDelay.value = false
+  // keep testUrl across dialogs so user's custom URL persists
   groupDialogVisible.value = true
 }
 
@@ -192,12 +208,18 @@ const testOne = async (item: any, silent = false): Promise<void> => {
   if (testing.value[item.name]) return
   testing.value[item.name] = true
   try {
-    const result = await proxyStore.testProxy(item.name)
+    const url = testUrl.value || 'http://cp.cloudflare.com/generate_204'
+    const result = await proxyStore.testProxy(item.name, url, 5000)
     if (result.error || result.delay === 0) {
       item.delay = 0
-      if (!silent) ElMessage.warning(`${item.name}: Timeout / unreachable`)
+      // Extract the meaningful part from the error string for the tooltip
+      const raw = result.error || ''
+      const match = raw.match(/status (\d+): (.+)/)
+      item.testErr = match ? `HTTP ${match[1]}: ${match[2]}` : (raw || 'Timeout / unreachable')
+      if (!silent) ElMessage.warning(`${item.name}: ${item.testErr}`)
     } else {
       item.delay = result.delay
+      item.testErr = undefined
       if (!silent) {
         const suffix = result.from_cache ? ' (cached)' : ''
         ElMessage.success(`${item.name}: ${result.delay} ms${suffix}`)
@@ -205,6 +227,7 @@ const testOne = async (item: any, silent = false): Promise<void> => {
     }
   } catch {
     item.delay = 0
+    item.testErr = 'Test failed'
     if (!silent) ElMessage.error(`${item.name}: Test failed`)
   } finally {
     testing.value[item.name] = false

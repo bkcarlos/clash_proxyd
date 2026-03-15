@@ -20,11 +20,11 @@ export interface ProxyDelayResult {
   error?: string
 }
 
-export const testProxy = (name: string, url?: string): Promise<ProxyDelayResult> => {
+export const testProxy = (name: string, url?: string, timeout?: number): Promise<ProxyDelayResult> => {
   return request({
     url: `/proxy/proxies/${name}/test`,
     method: 'POST',
-    data: { url: url || 'http://www.gstatic.com/generate_204', timeout: 3000 }
+    data: { url: url || 'http://cp.cloudflare.com/generate_204', timeout: timeout || 5000 }
   }).then((data: any) => ({ delay: data.delay ?? 0, from_cache: data.from_cache, error: data.error }))
 }
 
