@@ -101,7 +101,10 @@ func (m *Manager) Stop() error {
 	}
 
 	if err := m.process.Stop(); err != nil {
-		return fmt.Errorf("failed to stop process: %w", err)
+		// If the process already exited on its own, that is still a
+		// successful stop from our perspective — always clean up state.
+		logx.Warn("error signalling mihomo during stop (process may have already exited)",
+			zap.Error(err))
 	}
 
 	m.running = false
@@ -184,11 +187,31 @@ func (m *Manager) GetCurrentConfigPath() string {
 	return m.currentConfigPath
 }
 
-// IsRunning returns whether mihomo is running
+// IsRunning returns whether mihomo is running.
+// If the in-memory flag says running but the process has already exited,
+// it cleans up the stale state and returns false.
 func (m *Manager) IsRunning() bool {
 	m.mu.RLock()
-	defer m.mu.RUnlock()
-	return m.running
+	running := m.running
+	process := m.process
+	m.mu.RUnlock()
+
+	if !running {
+		return false
+	}
+
+	// Verify the process is still actually alive.
+	if process != nil && !process.IsRunning() {
+		m.mu.Lock()
+		m.running = false
+		m.process = nil
+		m.client = nil
+		m.mu.Unlock()
+		logx.Warn("mihomo process exited unexpectedly; cleared stale running state")
+		return false
+	}
+
+	return true
 }
 
 // GetPID returns the mihomo process ID

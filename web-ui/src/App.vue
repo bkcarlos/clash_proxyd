@@ -138,6 +138,17 @@ html.dark .el-message-box__header {
   border-bottom: 1px solid var(--cv-border);
 }
 
+html.dark .el-message-box .el-button--default {
+  background: var(--cv-surface2);
+  border-color: rgba(255, 255, 255, 0.2);
+  color: var(--cv-text);
+}
+
+html.dark .el-message-box .el-button--default:hover {
+  background: rgba(255, 255, 255, 0.07);
+  border-color: rgba(255, 255, 255, 0.3);
+}
+
 /* ── Input / Select ─────────────────────────────────────────────────────── */
 html.dark .el-input__wrapper,
 html.dark .el-textarea__inner {

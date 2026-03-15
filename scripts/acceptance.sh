@@ -140,7 +140,7 @@ create_source_from_file() {
     echo ""
     return 1
   fi
-  printf '%s' "${API_BODY}" | json_eval "data.get('id','')"
+  printf '%s' "${API_BODY}" | json_eval "data.get('source',{}).get('id','')"
 }
 
 main_flow() {
@@ -274,7 +274,7 @@ failure_flow() {
   call_api "POST" "/sources" "{\"name\":\"acceptance-invalid-url-$(date +%s)\",\"type\":\"http\",\"url\":\"http://127.0.0.1:1/does-not-exist\",\"enabled\":true,\"update_interval\":3600,\"priority\":0}"
   local bad_source_id=""
   if expect_status 201; then
-    bad_source_id="$(printf '%s' "${API_BODY}" | json_eval "data.get('id','')")"
+    bad_source_id="$(printf '%s' "${API_BODY}" | json_eval "data.get('source',{}).get('id','')")"
     call_api "POST" "/sources/${bad_source_id}/test"
     if expect_status 200; then
       local success
@@ -318,6 +318,9 @@ EOF
   else
     record_fail "Config path traversal" "Expected rejection, got code=${API_CODE}. body=${API_BODY}"
   fi
+
+  # Ensure mihomo is stopped before testing the start path
+  call_api "POST" "/proxy/mihomo/stop" || true
 
   call_api "POST" "/proxy/mihomo/start"
   if expect_status 200; then

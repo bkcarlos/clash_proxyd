@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"time"
 
 	"github.com/clash-proxyd/proxyd/internal/types"
@@ -81,15 +82,11 @@ func (c *Client) GetProxy(name string) (map[string]interface{}, error) {
 
 // GetProxyDelay returns proxy delay
 func (c *Client) GetProxyDelay(proxyName string, testURL string, timeout int) (int, error) {
-	url := fmt.Sprintf("/proxies/%s/delay", proxyName)
-
-	body := map[string]interface{}{
-		"url":     testURL,
-		"timeout": timeout,
-	}
+	path := fmt.Sprintf("/proxies/%s/delay?url=%s&timeout=%d",
+		proxyName, url.QueryEscape(testURL), timeout)
 
 	var result map[string]interface{}
-	if err := c.post(url, body, &result); err != nil {
+	if err := c.get(path, &result); err != nil {
 		return 0, err
 	}
 
