@@ -366,9 +366,33 @@ func (a *App) autoStartMihomo() {
 	logx.Info("Auto-starting mihomo", zap.String("config", configPath))
 	if err := a.mihomoManager.Start(configPath); err != nil {
 		logx.Error("Failed to auto-start mihomo", zap.Error(err))
+		a.upsertRuntimeStatus("error", 0, configPath)
 	} else {
 		logx.Info("Mihomo started successfully")
+		a.upsertRuntimeStatus("running", a.mihomoManager.GetPID(), configPath)
 	}
+}
+
+// upsertRuntimeStatus writes mihomo status to the runtime table.
+func (a *App) upsertRuntimeStatus(status string, pid int, configPath string) {
+	if a.runtimeStore == nil {
+		return
+	}
+	rt, err := a.runtimeStore.Get()
+	if err != nil {
+		_ = a.runtimeStore.Create(&types.Runtime{
+			PID:        pid,
+			ConfigPath: configPath,
+			Status:     status,
+		})
+		return
+	}
+	rt.PID = pid
+	rt.Status = status
+	if configPath != "" {
+		rt.ConfigPath = configPath
+	}
+	_ = a.runtimeStore.Update(rt)
 }
 
 // killStaleMihomo terminates all mihomo processes recorded as 'running' in the

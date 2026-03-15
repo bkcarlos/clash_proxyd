@@ -35,10 +35,12 @@ var startTime = time.Now()
 func (h *Handler) GetSystemInfo(c *gin.Context) {
 	uptime := time.Since(startTime).Seconds()
 
-	// Get mihomo status
+	// Use live manager state as source of truth; fall back to DB only when not running.
 	mihomoStatus := "stopped"
-	if runtime, err := h.runtimeStore.Get(); err == nil {
-		mihomoStatus = runtime.Status
+	if h.mihomoManager.IsRunning() {
+		mihomoStatus = "running"
+	} else if rt, err := h.runtimeStore.Get(); err == nil && rt.Status == "error" {
+		mihomoStatus = "error"
 	}
 
 	// Use the configured default path — this is where new configs should be written.
@@ -76,13 +78,18 @@ func (h *Handler) GetSystemStatus(c *gin.Context) {
 		"mihomo_status": "unknown",
 	}
 
-	// Get mihomo status
-	if runtime, err := h.runtimeStore.Get(); err == nil {
-		status["mihomo_status"] = runtime.Status
-		status["mihomo_pid"] = runtime.PID
-		status["mihomo_port"] = runtime.Port
-		status["mihomo_uptime"] = runtime.Uptime
-		status["mihomo_memory"] = runtime.MemoryUsage
+	// Use live manager state as source of truth for status and PID.
+	if h.mihomoManager.IsRunning() {
+		status["mihomo_status"] = "running"
+		status["mihomo_pid"] = h.mihomoManager.GetPID()
+	} else {
+		status["mihomo_status"] = "stopped"
+		status["mihomo_pid"] = 0
+	}
+	if rt, err := h.runtimeStore.Get(); err == nil {
+		status["mihomo_port"] = rt.Port
+		status["mihomo_uptime"] = rt.Uptime
+		status["mihomo_memory"] = rt.MemoryUsage
 	}
 
 	if action, details, ts, ok := lastAutoUpdateSummary(h.auditStore); ok {
