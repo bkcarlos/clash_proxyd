@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io/fs"
 	"net/http"
@@ -620,6 +621,14 @@ func spaHandler(fsys fs.FS, apiTarget string) http.Handler {
 	proxy.Director = func(req *http.Request) {
 		origDirector(req)
 		req.Host = target.Host
+	}
+	// Suppress benign client-disconnect errors (context.Canceled) that the
+	// default logger would otherwise print as "http: proxy error: ...".
+	proxy.ErrorHandler = func(w http.ResponseWriter, r *http.Request, err error) {
+		if errors.Is(err, context.Canceled) {
+			return
+		}
+		http.Error(w, "proxy error: "+err.Error(), http.StatusBadGateway)
 	}
 
 	fileServer := http.FileServer(http.FS(fsys))
