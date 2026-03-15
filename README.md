@@ -176,6 +176,12 @@ data/
 logs/                   # 应用日志和 mihomo 日志
 ```
 
+### 致谢
+
+本项目的 UI 设计（Proxies 页面双面板节点卡片布局、暗色配色方案）参考并借鉴了 [clash-verge-rev](https://github.com/clash-verge-rev/clash-verge-rev) 的设计风格，在此向该项目的作者和贡献者表示感谢。
+
+> clash-verge-rev 是一款优秀的跨平台 Clash Meta GUI 客户端，本项目仅参考其视觉设计思路，未使用其源代码。
+
 ---
 
 <a name="english"></a>
@@ -339,6 +345,12 @@ data/
   mihomo/               # mihomo config and runtime files
 logs/                   # Application and mihomo logs
 ```
+
+### Acknowledgements
+
+The UI design of this project — including the two-panel proxy node card layout and dark color palette — was inspired by [clash-verge-rev](https://github.com/clash-verge-rev/clash-verge-rev). Many thanks to its authors and contributors.
+
+> clash-verge-rev is an excellent cross-platform Clash Meta GUI client. Only its visual design patterns were referenced; no source code was reused.
 
 ### License
 
