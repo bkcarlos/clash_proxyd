@@ -470,6 +470,7 @@ func (h *Handler) MihomoInstallStatus(c *gin.Context) {
 		"binary_path":     binaryPath,
 		"is_running":      h.mihomoManager.IsRunning(),
 		"pid":             h.mihomoManager.GetPID(),
+		"mixed_port":      h.readMixedPort(),
 	})
 }
 

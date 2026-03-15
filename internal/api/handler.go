@@ -3,7 +3,9 @@ package api
 import (
 	"fmt"
 	"net/http"
+	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 
@@ -197,6 +199,29 @@ func (h *Handler) runtimeStatusFromManager(configPath string) (string, int, stri
 
 func (h *Handler) defaultRuntimeConfigPath() string {
 	return filepath.Join(h.mihomoConfigDir, "runtime.yaml")
+}
+
+// readMixedPort reads the mixed-port value from the current runtime.yaml.
+// Returns 0 when the file is missing or the field is absent.
+func (h *Handler) readMixedPort() int {
+	data, err := os.ReadFile(h.defaultRuntimeConfigPath())
+	if err != nil {
+		return 0
+	}
+	// Quick scan: find "mixed-port: <N>" without a full YAML parse.
+	for _, line := range strings.Split(string(data), "\n") {
+		line = strings.TrimSpace(line)
+		if strings.HasPrefix(line, "mixed-port:") {
+			parts := strings.SplitN(line, ":", 2)
+			if len(parts) == 2 {
+				var port int
+				if _, err := fmt.Sscanf(strings.TrimSpace(parts[1]), "%d", &port); err == nil && port > 0 {
+					return port
+				}
+			}
+		}
+	}
+	return 0
 }
 
 func (h *Handler) upsertRuntime(status string, pid int, configPath string) {

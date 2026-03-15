@@ -278,10 +278,13 @@ const copyFallback = (text: string) => {
 onMounted(async () => {
   await systemStore.fetchSettings()
   Object.assign(settings, systemStore.settings)
-  // Try to read current mihomo port from install-status
+  // Read actual mixed-port and running state from install-status
   try {
     const s: any = await request({ url: '/proxy/mihomo/install-status', method: 'GET' })
     proxyStatus.value.running = s.is_running
+    if (s.mixed_port && s.mixed_port > 0) {
+      proxyPort.value = s.mixed_port
+    }
   } catch { /* non-critical */ }
   // Load local IP addresses for the host selector
   try {
