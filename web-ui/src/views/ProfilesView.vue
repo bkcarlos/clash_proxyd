@@ -1,5 +1,6 @@
 <template>
   <div class="profiles-view">
+
     <!-- Add profile bar -->
     <div class="add-bar">
       <el-input
@@ -20,12 +21,7 @@
 
     <!-- Step progress (shown while adding) -->
     <div v-if="busy" class="step-bar">
-      <div
-        v-for="step in steps"
-        :key="step.key"
-        class="step-item"
-        :class="step.status"
-      >
+      <div v-for="step in steps" :key="step.key" class="step-item" :class="step.status">
         <el-icon v-if="step.status === 'done'"><CircleCheck /></el-icon>
         <el-icon v-else-if="step.status === 'error'"><CircleClose /></el-icon>
         <span v-else-if="step.status === 'active'" class="step-spinner" />
@@ -34,34 +30,67 @@
       </div>
     </div>
 
-    <!-- Profile list -->
-    <div class="profile-list">
+    <!-- Profile grid -->
+    <div class="profile-grid">
       <div
         v-for="src in sources"
         :key="src.id"
         class="profile-card"
-        :class="{ disabled: !src.enabled }"
+        :class="{ disabled: !src.enabled, active: activeProfileId === src.id, loading: fetchingId === src.id }"
+        @click="fetchAndApply(src)"
       >
-        <div class="profile-main">
-          <div class="profile-info">
-            <div class="profile-name">{{ src.name }}</div>
-            <div class="profile-url">{{ src.url || src.path }}</div>
-            <div class="profile-meta">
-              <el-tag size="small" :type="src.type === 'http' ? 'primary' : 'success'">{{ src.type }}</el-tag>
-              <span v-if="src.last_fetch" class="meta-text">
-                {{ formatSize(src.content_size) }} · Updated {{ formatRelative(src.last_fetch) }}
-              </span>
-              <el-tag v-else type="warning" size="small">No cache</el-tag>
-            </div>
-          </div>
+        <!-- Active badge -->
+        <div v-if="activeProfileId === src.id" class="active-badge">
+          <el-icon><Select /></el-icon>
+          <span>Active</span>
+        </div>
 
-          <div class="profile-actions">
-            <el-switch
-              v-model="src.enabled"
-              size="small"
-              @change="toggleEnabled(src)"
-            />
-            <el-tooltip content="Fetch & apply">
+        <!-- Card header: name + type -->
+        <div class="card-top">
+          <div class="card-avatar" :class="src.type">
+            <el-icon v-if="src.type === 'http'"><Connection /></el-icon>
+            <el-icon v-else><Document /></el-icon>
+          </div>
+          <div class="card-title-block">
+            <div class="card-name">{{ src.name }}</div>
+            <el-tag size="small" :type="src.type === 'http' ? 'primary' : 'success'" class="card-type-tag">
+              {{ src.type }}
+            </el-tag>
+          </div>
+        </div>
+
+        <!-- URL -->
+        <div class="card-url">{{ src.url || src.path }}</div>
+
+        <!-- Meta row -->
+        <div class="card-meta">
+          <span v-if="src.last_fetch" class="meta-item">
+            <el-icon><Timer /></el-icon>{{ formatRelative(src.last_fetch) }}
+          </span>
+          <span v-if="src.content_size" class="meta-item">
+            <el-icon><Files /></el-icon>{{ formatSize(src.content_size) }}
+          </span>
+          <el-tag v-if="!src.last_fetch" type="warning" size="small">No cache</el-tag>
+        </div>
+
+        <!-- Progress bar while fetching -->
+        <el-progress
+          v-if="fetchingId === src.id"
+          :percentage="100"
+          status="striped"
+          :striped-flow="true"
+          :duration="3"
+          :show-text="false"
+          class="card-progress"
+        />
+
+        <!-- Actions footer -->
+        <div class="card-footer" @click.stop>
+          <el-tooltip content="Enable / Disable">
+            <el-switch v-model="src.enabled" size="small" @change="toggleEnabled(src)" />
+          </el-tooltip>
+          <div class="footer-right">
+            <el-tooltip content="Refresh & apply">
               <el-button link :loading="fetchingId === src.id" :disabled="busy" @click="fetchAndApply(src)">
                 <el-icon><Refresh /></el-icon>
               </el-button>
@@ -73,20 +102,13 @@
             </el-tooltip>
           </div>
         </div>
-
-        <!-- Progress bar while fetching -->
-        <el-progress
-          v-if="fetchingId === src.id"
-          :percentage="100"
-          status="striped"
-          :striped-flow="true"
-          :duration="3"
-          :show-text="false"
-          style="margin-top:8px"
-        />
       </div>
 
-      <el-empty v-if="sources.length === 0 && !loading" description="No profiles yet. Paste a subscription URL above." />
+      <el-empty
+        v-if="sources.length === 0 && !loading"
+        description="No profiles yet. Paste a subscription URL above."
+        class="grid-empty"
+      />
     </div>
 
     <!-- Revisions -->
@@ -108,10 +130,12 @@
             <span class="rev-hash">{{ row.source_hash }}</span>
           </template>
         </el-table-column>
-        <el-table-column label="操作" width="120">
+        <el-table-column label="操作" width="140" class-name="op-col">
           <template #default="{ row }">
-            <el-button size="small" @click="viewRevision(row)">查看</el-button>
-            <el-button size="small" type="primary" plain @click="rollback(row)">应用</el-button>
+            <div class="op-btns">
+              <el-button size="small" @click="viewRevision(row)">查看</el-button>
+              <el-button size="small" type="primary" plain @click="rollback(row)">应用</el-button>
+            </div>
           </template>
         </el-table-column>
       </el-table>
@@ -127,7 +151,10 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Plus, Refresh, Delete, Link, CircleCheck, CircleClose } from '@element-plus/icons-vue'
+import {
+  Plus, Refresh, Delete, Link, CircleCheck, CircleClose,
+  Select, Connection, Document, Timer, Files
+} from '@element-plus/icons-vue'
 import * as sourceApi from '@/api/source'
 import { quickApply, listRevisions, rollbackRevision } from '@/api/config'
 import { useProxyStore } from '@/stores/proxy'
@@ -137,7 +164,7 @@ const proxyStore = useProxyStore()
 
 const sources = ref<any[]>([])
 const loading = ref(false)
-const busy = ref(false)       // locked while add pipeline runs
+const busy = ref(false)
 const fetchingId = ref<number | null>(null)
 const newUrl = ref('')
 const newName = ref('')
@@ -145,7 +172,18 @@ const revisions = ref<any[]>([])
 const revDialogVisible = ref(false)
 const revContent = ref('')
 
-// ── Step pipeline UI ────────────────────────────────────────────────────────
+// ── Active profile selection (persisted) ─────────────────────────────────────
+const ACTIVE_KEY = 'active_profile_id'
+const activeProfileId = ref<number | null>(
+  Number(localStorage.getItem(ACTIVE_KEY)) || null
+)
+const markActive = (id: number | null) => {
+  activeProfileId.value = id
+  if (id == null) localStorage.removeItem(ACTIVE_KEY)
+  else localStorage.setItem(ACTIVE_KEY, String(id))
+}
+
+// ── Step pipeline UI ─────────────────────────────────────────────────────────
 type StepStatus = 'pending' | 'active' | 'done' | 'error'
 interface Step { key: string; label: string; status: StepStatus }
 
@@ -162,17 +200,12 @@ function initSteps(labels: string[]) {
 function advanceStep(errorMsg?: string) {
   const idx = steps.value.findIndex(s => s.status === 'active')
   if (idx < 0) return
-  if (errorMsg) {
-    steps.value[idx].status = 'error'
-    return
-  }
+  if (errorMsg) { steps.value[idx].status = 'error'; return }
   steps.value[idx].status = 'done'
-  if (idx + 1 < steps.value.length) {
-    steps.value[idx + 1].status = 'active'
-  }
+  if (idx + 1 < steps.value.length) steps.value[idx + 1].status = 'active'
 }
 
-// ── Helpers ─────────────────────────────────────────────────────────────────
+// ── Helpers ──────────────────────────────────────────────────────────────────
 const formatSize = (bytes: number) => {
   if (!bytes) return ''
   if (bytes < 1024) return `${bytes}B`
@@ -201,7 +234,7 @@ const loadRevisions = async () => {
   try { revisions.value = await listRevisions(10) } catch { /* non-critical */ }
 }
 
-// ── Core pipeline: fetch + apply + refresh proxies ───────────────────────────
+// ── Core pipeline ────────────────────────────────────────────────────────────
 const runApplyPipeline = async () => {
   const res = await quickApply()
   await loadRevisions()
@@ -218,7 +251,6 @@ const addProfile = async () => {
   initSteps(['Creating source', 'Fetching subscription', 'Applying config'])
 
   try {
-    // Step 1: create
     const src = await sourceApi.createSource({
       name: newName.value.trim() || new URL(url).hostname,
       type: 'http',
@@ -229,15 +261,14 @@ const addProfile = async () => {
     } as any)
     advanceStep()
 
-    // Step 2: fetch
     await sourceApi.fetchSource(src.id)
     await loadSources()
     advanceStep()
 
-    // Step 3: apply
     await runApplyPipeline()
     advanceStep()
 
+    markActive(src.id)
     newUrl.value = ''
     newName.value = ''
     ElMessage.success('Profile added and applied')
@@ -250,13 +281,15 @@ const addProfile = async () => {
   }
 }
 
-// ── Fetch & auto-apply ────────────────────────────────────────────────────────
+// ── Fetch & apply ─────────────────────────────────────────────────────────────
 const fetchAndApply = async (src: Source) => {
+  if (fetchingId.value) return
   fetchingId.value = src.id
   try {
     await sourceApi.fetchSource(src.id)
     await loadSources()
     await runApplyPipeline()
+    markActive(src.id)
     ElMessage.success(`${src.name} updated and applied`)
   } catch (e: any) {
     ElMessage.error(e.message || 'Failed')
@@ -278,10 +311,13 @@ const toggleEnabled = async (src: any) => {
 const deleteProfile = async (id: number) => {
   try {
     await ElMessageBox.confirm('Delete this profile?', 'Confirm', { type: 'warning' })
-    await sourceApi.deleteSource(id)
-    await loadSources()
-    ElMessage.success('Deleted')
-  } catch { /* cancel */ }
+  } catch {
+    return
+  }
+  await sourceApi.deleteSource(id)
+  if (activeProfileId.value === id) markActive(null)
+  await loadSources()
+  ElMessage.success('Deleted')
 }
 
 const viewRevision = (rev: any) => {
@@ -292,11 +328,14 @@ const viewRevision = (rev: any) => {
 const rollback = async (rev: any) => {
   try {
     await ElMessageBox.confirm(`Apply revision ${rev.version}?`, 'Confirm', { type: 'warning' })
-    await rollbackRevision(rev.id)
-    await proxyStore.fetchProxies(true)
-    ElMessage.success('Applied')
-    await loadRevisions()
-  } catch { /* cancel */ }
+  } catch {
+    return
+  }
+  await rollbackRevision(rev.id)
+  markActive(null)
+  await proxyStore.fetchProxies(true)
+  ElMessage.success('Applied')
+  await loadRevisions()
 }
 
 onMounted(() => {
@@ -308,6 +347,7 @@ onMounted(() => {
 <style scoped>
 .profiles-view { display: flex; flex-direction: column; gap: 16px; }
 
+/* ── Add bar ── */
 .add-bar {
   display: flex;
   gap: 8px;
@@ -318,16 +358,14 @@ onMounted(() => {
   padding: 14px 16px;
 }
 
-/* Step progress bar */
+/* ── Step bar ── */
 .step-bar {
   display: flex;
   align-items: center;
-  gap: 0;
   background: var(--cv-surface);
   border: 1px solid var(--cv-border);
   border-radius: var(--cv-radius);
   padding: 12px 20px;
-  overflow: hidden;
 }
 
 .step-item {
@@ -343,10 +381,8 @@ onMounted(() => {
 .step-item:not(:last-child)::after {
   content: '';
   position: absolute;
-  right: 0;
-  top: 50%;
-  width: 24px;
-  height: 1px;
+  right: 0; top: 50%;
+  width: 24px; height: 1px;
   background: var(--cv-border);
   transform: translateY(-50%);
 }
@@ -374,46 +410,158 @@ onMounted(() => {
 
 @keyframes spin { to { transform: rotate(360deg); } }
 
-.profile-list { display: flex; flex-direction: column; gap: 10px; }
+/* ── Profile grid ── */
+.profile-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16px;
+}
 
+.grid-empty {
+  grid-column: 1 / -1;
+}
+
+/* ── Profile card ── */
 .profile-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
   background: var(--cv-surface);
   border: 1px solid var(--cv-border);
   border-radius: var(--cv-radius);
-  padding: 14px 16px;
-  transition: border-color 0.15s;
+  padding: 16px;
+  cursor: pointer;
+  transition: border-color 0.15s, box-shadow 0.15s, transform 0.1s;
+  min-height: 160px;
 }
 
-.profile-card:hover { border-color: rgba(88,101,242,0.4); }
+.profile-card:hover {
+  border-color: rgba(88, 101, 242, 0.5);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+  transform: translateY(-1px);
+}
+
 .profile-card.disabled { opacity: 0.5; }
 
-.profile-main { display: flex; align-items: center; gap: 12px; }
-
-.profile-info { flex: 1; min-width: 0; }
-
-.profile-name {
-  font-weight: 600;
-  font-size: 14px;
-  color: var(--cv-text);
-  margin-bottom: 3px;
+.profile-card.active {
+  border-color: rgba(103, 194, 58, 0.7);
+  box-shadow: 0 0 0 1px rgba(103, 194, 58, 0.3), 0 4px 20px rgba(103, 194, 58, 0.1);
 }
 
-.profile-url {
-  font-size: 12px;
+/* ── Active badge ── */
+.active-badge {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  font-weight: 600;
+  color: #67c23a;
+  background: rgba(103, 194, 58, 0.12);
+  border: 1px solid rgba(103, 194, 58, 0.3);
+  border-radius: 20px;
+  padding: 2px 8px 2px 6px;
+}
+
+/* ── Card top: avatar + name ── */
+.card-top {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  /* leave room for active badge on the right */
+  padding-right: 80px;
+}
+
+.card-avatar {
+  width: 40px;
+  height: 40px;
+  border-radius: var(--cv-radius-sm);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 20px;
+  flex-shrink: 0;
+}
+
+.card-avatar.http {
+  background: rgba(88, 101, 242, 0.15);
+  color: #5865f2;
+}
+
+.card-avatar.file,
+.card-avatar.local {
+  background: rgba(103, 194, 58, 0.12);
+  color: #67c23a;
+}
+
+.card-title-block {
+  min-width: 0;
+  flex: 1;
+}
+
+.card-name {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--cv-text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  margin-bottom: 4px;
+}
+
+.card-type-tag { font-size: 10px; }
+
+/* ── URL ── */
+.card-url {
+  font-size: 11px;
   color: var(--cv-text-muted);
   font-family: monospace;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  margin-bottom: 6px;
+  flex: 1;
 }
 
-.profile-meta { display: flex; align-items: center; gap: 8px; }
+/* ── Meta ── */
+.card-meta {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
 
-.meta-text { font-size: 12px; color: var(--cv-text-muted); }
+.meta-item {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  color: var(--cv-text-muted);
+}
 
-.profile-actions { display: flex; align-items: center; gap: 4px; flex-shrink: 0; }
+.meta-item .el-icon { font-size: 12px; }
 
+/* ── Progress ── */
+.card-progress { margin-top: 0; }
+
+/* ── Footer ── */
+.card-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: auto;
+  padding-top: 10px;
+  border-top: 1px solid var(--cv-border);
+}
+
+.footer-right {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+/* ── Revisions ── */
 .revisions-card { margin-top: 0; }
 
 .card-header-row {
@@ -426,5 +574,12 @@ onMounted(() => {
   font-family: monospace;
   font-size: 11px;
   color: var(--cv-text-muted);
+}
+
+.op-btns {
+  display: flex;
+  gap: 6px;
+  flex-wrap: nowrap;
+  align-items: center;
 }
 </style>
