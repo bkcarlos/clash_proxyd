@@ -1,20 +1,20 @@
 <template>
   <div class="config-view">
     <div class="page-header">
-      <h1>Configuration</h1>
+      <h1>{{ t('config.title') }}</h1>
     </div>
 
     <el-card class="config-card">
       <template #header>
-        <span>Generate Configuration</span>
+        <span>{{ t('config.generateConfig') }}</span>
       </template>
 
       <el-form :model="form" label-width="120px">
-        <el-form-item label="Sources">
+        <el-form-item :label="t('config.sources')">
           <el-select
             v-model="form.source_ids"
             multiple
-            placeholder="Select sources"
+            :placeholder="t('config.sourcesPlaceholder')"
             style="width: 100%"
           >
             <el-option
@@ -28,7 +28,7 @@
 
         <el-form-item>
           <el-button type="primary" :loading="loading" @click="generateConfig">
-            Generate Configuration
+            {{ t('config.generateBtn') }}
           </el-button>
         </el-form-item>
       </el-form>
@@ -37,11 +37,11 @@
     <el-card v-if="generatedConfig" class="config-card">
       <template #header>
         <div class="card-header">
-          <span>Generated Configuration</span>
+          <span>{{ t('config.generatedConfig') }}</span>
           <div>
-            <el-button @click="downloadConfig">Download</el-button>
-            <el-button @click="applyConfig">Apply</el-button>
-            <el-button type="primary" @click="saveConfig">Save</el-button>
+            <el-button @click="downloadConfig">{{ t('config.download') }}</el-button>
+            <el-button @click="applyConfig">{{ t('config.apply') }}</el-button>
+            <el-button type="primary" @click="saveConfig">{{ t('config.save') }}</el-button>
           </div>
         </div>
       </template>
@@ -57,32 +57,32 @@
     <el-card class="config-card">
       <template #header>
         <div class="card-header">
-          <span>Configuration Revisions</span>
-          <el-button size="small" @click="loadRevisions">Refresh</el-button>
+          <span>{{ t('config.configRevisions') }}</span>
+          <el-button size="small" @click="loadRevisions">{{ t('common.refresh') }}</el-button>
         </div>
       </template>
 
       <el-table :data="revisions" border stripe>
-        <el-table-column prop="id" label="ID" width="80" />
-        <el-table-column prop="version" label="Version" />
-        <el-table-column prop="source_hash" label="Hash" min-width="220" show-overflow-tooltip />
-        <el-table-column prop="created_at" label="Created At" width="180">
+        <el-table-column prop="id" :label="t('config.colId')" width="80" />
+        <el-table-column prop="version" :label="t('config.colVersion')" />
+        <el-table-column prop="source_hash" :label="t('config.colHash')" min-width="220" show-overflow-tooltip />
+        <el-table-column prop="created_at" :label="t('config.colCreatedAt')" width="180">
           <template #default="{ row }">
             {{ new Date(row.created_at).toLocaleString() }}
           </template>
         </el-table-column>
-        <el-table-column prop="created_by" label="Created By" width="150" />
-        <el-table-column label="Actions" width="220">
+        <el-table-column prop="created_by" :label="t('config.colCreatedBy')" width="150" />
+        <el-table-column :label="t('config.colActions')" width="220">
           <template #default="{ row }">
-            <el-button size="small" @click="viewRevision(row)">View</el-button>
-            <el-button size="small" @click="rollbackRevision(row)">Rollback</el-button>
-            <el-button size="small" type="danger" @click="deleteRevision(row.id)">Delete</el-button>
+            <el-button size="small" @click="viewRevision(row)">{{ t('config.view') }}</el-button>
+            <el-button size="small" @click="rollbackRevision(row)">{{ t('config.rollback') }}</el-button>
+            <el-button size="small" type="danger" @click="deleteRevision(row.id)">{{ t('config.delete') }}</el-button>
           </template>
         </el-table-column>
       </el-table>
     </el-card>
 
-    <el-dialog v-model="configDialogVisible" title="Configuration" width="80%">
+    <el-dialog v-model="configDialogVisible" :title="t('config.configDialog')" width="80%">
       <el-input
         v-model="viewConfig"
         type="textarea"
@@ -98,7 +98,9 @@ import { useSourceStore } from '@/stores/source'
 import * as configApi from '@/api/config'
 import { getSystemInfo } from '@/api/system'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import { useI18n } from 'vue-i18n'
 
+const { t } = useI18n()
 const sourceStore = useSourceStore()
 
 const loading = ref(false)
@@ -115,7 +117,7 @@ const runtimePath = ref('')  // loaded from backend on mount
 
 const generateConfig = async () => {
   if (form.source_ids.length === 0) {
-    ElMessage.warning('Please select at least one source')
+    ElMessage.warning(t('config.selectSource'))
     return
   }
 
@@ -123,10 +125,10 @@ const generateConfig = async () => {
   try {
     const result = await configApi.generateConfig(form.source_ids)
     generatedConfig.value = result.config
-    ElMessage.success('Configuration generated successfully')
+    ElMessage.success(t('config.generateSuccess'))
     await loadRevisions()
   } catch (error: any) {
-    ElMessage.error(error.message || 'Generation failed')
+    ElMessage.error(error.message || t('config.generateFailed'))
   } finally {
     loading.value = false
   }
@@ -146,34 +148,34 @@ const downloadConfig = () => {
 
 const applyConfig = async () => {
   if (!generatedConfig.value) {
-    ElMessage.warning('No generated configuration')
+    ElMessage.warning(t('config.noGeneratedConfig'))
     return
   }
 
   try {
     // Don't send path — let backend use its configured default
     await configApi.applyConfig(generatedConfig.value)
-    ElMessage.success('Configuration applied successfully')
+    ElMessage.success(t('config.applySuccess'))
   } catch (error: any) {
-    ElMessage.error(error.message || 'Apply failed')
+    ElMessage.error(error.message || t('config.applyFailed'))
   }
 }
 
 const saveConfig = async () => {
   try {
-    await ElMessageBox.prompt('Enter config file path:', 'Save Configuration', {
+    await ElMessageBox.prompt(t('config.savePromptLabel'), t('config.savePromptTitle'), {
       inputValue: runtimePath.value,
-      confirmButtonText: 'Save',
-      cancelButtonText: 'Cancel'
+      confirmButtonText: t('config.saveConfirmBtn'),
+      cancelButtonText: t('config.saveCancelBtn')
     }).then(async ({ value }) => {
       runtimePath.value = value
       await configApi.saveConfig(generatedConfig.value, value)
-      ElMessage.success('Configuration saved successfully')
+      ElMessage.success(t('config.saveSuccess'))
       await loadRevisions()
     })
   } catch (error: any) {
     if (error !== 'cancel') {
-      ElMessage.error(error.message || 'Save failed')
+      ElMessage.error(error.message || t('config.saveFailed'))
     }
   }
 }
@@ -182,7 +184,7 @@ const loadRevisions = async () => {
   try {
     revisions.value = await configApi.listRevisions(20)
   } catch (error: any) {
-    ElMessage.error(error.message || 'Failed to load revisions')
+    ElMessage.error(error.message || t('config.loadRevisionsFailed'))
   }
 }
 
@@ -193,30 +195,32 @@ const viewRevision = async (revision: any) => {
 
 const rollbackRevision = async (revision: any) => {
   try {
-    await ElMessageBox.confirm(`Rollback to revision ${revision.version} and apply now?`, 'Confirm rollback', {
-      type: 'warning'
-    })
+    await ElMessageBox.confirm(
+      t('config.rollbackConfirm', { version: revision.version }),
+      t('config.rollbackTitle'),
+      { type: 'warning' }
+    )
     await configApi.rollbackRevision(revision.id)
-    ElMessage.success(`Revision ${revision.version} rolled back and applied`)
+    ElMessage.success(t('config.rollbackSuccess', { version: revision.version }))
     await loadRevisions()
   } catch (error: any) {
     if (error !== 'cancel') {
-      ElMessage.error(error.message || 'Rollback failed')
+      ElMessage.error(error.message || t('config.rollbackFailed'))
     }
   }
 }
 
 const deleteRevision = async (id: number) => {
   try {
-    await ElMessageBox.confirm('Are you sure to delete this revision?', 'Warning', {
+    await ElMessageBox.confirm(t('config.deleteConfirm'), t('config.deleteTitle'), {
       type: 'warning'
     })
     await configApi.deleteRevision(id)
-    ElMessage.success('Revision deleted successfully')
+    ElMessage.success(t('config.deleteSuccess'))
     await loadRevisions()
   } catch (error: any) {
     if (error !== 'cancel') {
-      ElMessage.error(error.message || 'Delete failed')
+      ElMessage.error(error.message || t('config.deleteFailed'))
     }
   }
 }

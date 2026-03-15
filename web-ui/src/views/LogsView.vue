@@ -2,9 +2,9 @@
   <div class="logs-view">
     <div class="toolbar">
       <el-tabs v-model="mode" class="mode-tabs" @tab-change="onModeChange">
-        <el-tab-pane label="Live (WebSocket)" name="live" />
-        <el-tab-pane label="proxyd log" name="proxyd" />
-        <el-tab-pane label="mihomo log" name="mihomo" />
+        <el-tab-pane :label="t('logs.liveModeTab')" name="live" />
+        <el-tab-pane :label="t('logs.proxydTab')" name="proxyd" />
+        <el-tab-pane :label="t('logs.mihomoTab')" name="mihomo" />
       </el-tabs>
 
       <div class="toolbar-right">
@@ -17,25 +17,25 @@
             <el-option label="error" value="error" />
           </el-select>
           <el-tag :type="wsConnected ? 'success' : 'danger'" size="small">
-            {{ wsConnected ? 'Connected' : 'Disconnected' }}
+            {{ wsConnected ? t('logs.connected') : t('logs.disconnected') }}
           </el-tag>
-          <el-button size="small" @click="liveLines = []">Clear</el-button>
+          <el-button size="small" @click="liveLines = []">{{ t('logs.clear') }}</el-button>
         </template>
 
         <!-- File mode controls -->
         <template v-else>
           <el-select v-model="lineCount" style="width:110px" size="small" @change="fetchLogs">
-            <el-option label="100 lines" :value="100" />
-            <el-option label="200 lines" :value="200" />
-            <el-option label="500 lines" :value="500" />
-            <el-option label="1000 lines" :value="1000" />
+            <el-option :label="t('logs.lines100')" :value="100" />
+            <el-option :label="t('logs.lines200')" :value="200" />
+            <el-option :label="t('logs.lines500')" :value="500" />
+            <el-option :label="t('logs.lines1000')" :value="1000" />
           </el-select>
           <el-button
             :type="autoRefresh ? 'primary' : 'default'"
             size="small"
             @click="toggleAutoRefresh"
           >
-            {{ autoRefresh ? 'Live' : 'Live' }}
+            {{ autoRefresh ? t('logs.liveBtnOn') : t('logs.liveBtnOff') }}
           </el-button>
           <el-button size="small" :loading="loading" @click="fetchLogs">
             <el-icon><Refresh /></el-icon>
@@ -51,7 +51,7 @@
 
         <el-input
           v-model="filterText"
-          placeholder="Filter..."
+          :placeholder="t('logs.filterPlaceholder')"
           clearable
           size="small"
           style="width:180px"
@@ -68,7 +68,7 @@
       <span class="file-meta" v-if="currentInfo.available">
         {{ currentInfo.total }} lines · {{ formatBytes(currentInfo.file_size) }}
       </span>
-      <el-tag v-else type="warning" size="small">{{ currentInfo.message || 'Not available' }}</el-tag>
+      <el-tag v-else type="warning" size="small">{{ currentInfo.message || t('logs.notAvailable') }}</el-tag>
     </div>
 
     <!-- Log output -->
@@ -81,11 +81,11 @@
         >{{ line }}</div>
       </template>
       <div v-else-if="!loading" class="log-empty">
-        <el-empty :description="mode === 'live' ? (wsConnected ? 'Waiting for logs...' : 'Not connected') : 'No log entries'" />
+        <el-empty :description="mode === 'live' ? (wsConnected ? t('logs.waitingLogs') : t('logs.notConnected')) : t('logs.noEntries')" />
       </div>
     </div>
 
-    <el-tooltip content="Scroll to bottom" placement="left">
+    <el-tooltip :content="t('logs.scrollToBottom')" placement="left">
       <el-button class="scroll-btn" circle type="primary" @click="scrollToBottom">
         <el-icon><ArrowDown /></el-icon>
       </el-button>
@@ -98,7 +98,9 @@ import { ref, computed, onMounted, onUnmounted, nextTick } from 'vue'
 import { ElMessage } from 'element-plus'
 import { Refresh, Search, Document, ArrowDown, Download } from '@element-plus/icons-vue'
 import { getLogs, downloadLog, type LogResponse } from '@/api/system'
+import { useI18n } from 'vue-i18n'
 
+const { t } = useI18n()
 type Mode = 'live' | 'proxyd' | 'mihomo'
 
 const mode = ref<Mode>('live')
@@ -164,7 +166,7 @@ const fetchLogs = async () => {
     if (mode.value === 'proxyd') proxydInfo.value = res
     else mihomoInfo.value = res
   } catch (e: any) {
-    ElMessage.error(e.message || 'Failed to load logs')
+    ElMessage.error(e.message || t('logs.loadFailed'))
   } finally {
     loading.value = false
   }

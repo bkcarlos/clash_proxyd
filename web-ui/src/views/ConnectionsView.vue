@@ -4,7 +4,7 @@
       <div class="stats">
         <span class="stat">
           <el-icon><Connection /></el-icon>
-          {{ connections.length }} active
+          {{ connections.length }} {{ t('connections.active') }}
         </span>
         <span class="stat">
           <el-icon><Top /></el-icon>
@@ -18,7 +18,7 @@
       <div style="display:flex;gap:8px">
         <el-input
           v-model="filter"
-          placeholder="Filter..."
+          :placeholder="t('connections.filterPlaceholder')"
           clearable
           style="width:200px"
           size="small"
@@ -26,11 +26,11 @@
           <template #prefix><el-icon><Search /></el-icon></template>
         </el-input>
         <el-button size="small" type="danger" :disabled="connections.length === 0" @click="closeAll">
-          Close All
+          {{ t('connections.closeAll') }}
         </el-button>
         <el-button size="small" :type="live ? 'primary' : 'default'" @click="live = !live">
           <el-icon><VideoPlay /></el-icon>
-          {{ live ? 'Live' : 'Paused' }}
+          {{ live ? t('connections.live') : t('connections.paused') }}
         </el-button>
       </div>
     </div>
@@ -41,23 +41,23 @@
       :max-height="tableHeight"
       stripe
     >
-      <el-table-column label="Host" min-width="200" show-overflow-tooltip>
+      <el-table-column :label="t('connections.host')" min-width="200" show-overflow-tooltip>
         <template #default="{ row }">
           <span class="host">{{ row.metadata?.host || row.metadata?.destinationIP || '—' }}</span>
           <span class="port">:{{ row.metadata?.destinationPort }}</span>
         </template>
       </el-table-column>
-      <el-table-column label="Network" width="90">
+      <el-table-column :label="t('connections.network')" width="90">
         <template #default="{ row }">
           <el-tag size="small" :type="row.metadata?.network === 'tcp' ? 'primary' : 'warning'">
             {{ row.metadata?.network?.toUpperCase() }}
           </el-tag>
         </template>
       </el-table-column>
-      <el-table-column label="Rule" width="140" show-overflow-tooltip>
+      <el-table-column :label="t('connections.rule')" width="140" show-overflow-tooltip>
         <template #default="{ row }">{{ row.rule }} {{ row.rulePayload ? `(${row.rulePayload})` : '' }}</template>
       </el-table-column>
-      <el-table-column label="Proxy" width="130" show-overflow-tooltip>
+      <el-table-column :label="t('connections.proxy')" width="130" show-overflow-tooltip>
         <template #default="{ row }">
           <el-tag size="small" :type="row.chains?.[0] === 'DIRECT' ? 'success' : 'info'">
             {{ row.chains?.[0] || '—' }}
@@ -70,7 +70,7 @@
       <el-table-column label="↓" width="90" align="right">
         <template #default="{ row }">{{ formatBytes(row.download) }}</template>
       </el-table-column>
-      <el-table-column label="Time" width="70" align="right">
+      <el-table-column :label="t('connections.time')" width="70" align="right">
         <template #default="{ row }">{{ formatAge(row.start) }}</template>
       </el-table-column>
       <el-table-column width="60" align="center">
@@ -83,7 +83,7 @@
     </el-table>
 
     <div v-if="!mihomoRunning" class="offline-tip">
-      <el-empty description="Mihomo is not running" />
+      <el-empty :description="t('connections.mihomoOffline')" />
     </div>
   </div>
 </template>
@@ -93,7 +93,9 @@ import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Connection, Search, VideoPlay, Top, Bottom, Close } from '@element-plus/icons-vue'
 import request from '@/api/request'
+import { useI18n } from 'vue-i18n'
 
+const { t } = useI18n()
 const connections = ref<any[]>([])
 const filter = ref('')
 const live = ref(true)
@@ -150,16 +152,16 @@ const closeConn = async (id: string) => {
     await request({ url: `/proxy/connections/${id}`, method: 'DELETE' })
     connections.value = connections.value.filter(c => c.id !== id)
   } catch (e: any) {
-    ElMessage.error(e.message || 'Failed')
+    ElMessage.error(e.message || t('connections.failed'))
   }
 }
 
 const closeAll = async () => {
   try {
-    await ElMessageBox.confirm('Close all connections?', 'Confirm', { type: 'warning' })
+    await ElMessageBox.confirm(t('connections.closeAllConfirm'), t('common.confirm'), { type: 'warning' })
     await request({ url: '/proxy/connections', method: 'DELETE' })
     connections.value = []
-    ElMessage.success('All connections closed')
+    ElMessage.success(t('connections.allClosed'))
   } catch { /* cancel */ }
 }
 

@@ -4,7 +4,7 @@
       <template #header>
         <div class="card-header">
           <h1>Proxy<span class="accent">d</span></h1>
-          <p>Mihomo Proxy Manager</p>
+          <p>{{ t('login.title') }}</p>
         </div>
       </template>
 
@@ -15,19 +15,19 @@
         label-width="80px"
         @submit.prevent="handleLogin"
       >
-        <el-form-item label="Username" prop="username">
+        <el-form-item :label="t('login.username')" prop="username">
           <el-input
             v-model="form.username"
-            placeholder="Enter username"
+            :placeholder="t('login.usernamePlaceholder')"
             @keyup.enter="handleLogin"
           />
         </el-form-item>
 
-        <el-form-item label="Password" prop="password">
+        <el-form-item :label="t('login.password')" prop="password">
           <el-input
             v-model="form.password"
             type="password"
-            placeholder="Enter password"
+            :placeholder="t('login.passwordPlaceholder')"
             show-password
             @keyup.enter="handleLogin"
           />
@@ -40,25 +40,27 @@
             style="width: 100%"
             @click="handleLogin"
           >
-            Login
+            {{ t('login.loginBtn') }}
           </el-button>
         </el-form-item>
       </el-form>
 
       <div class="login-footer">
-        <p>Default credentials: admin / admin</p>
-        <p class="warning">Please change the password after first login</p>
+        <p>{{ t('login.defaultCredentials') }}</p>
+        <p class="warning">{{ t('login.changePasswordWarning') }}</p>
       </div>
     </el-card>
   </div>
 </template>
 
 <script setup lang="ts">
-import { reactive, ref } from 'vue'
+import { reactive, ref, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { useUserStore } from '@/stores/user'
 import { ElMessage, FormInstance, FormRules } from 'element-plus'
+import { useI18n } from 'vue-i18n'
 
+const { t } = useI18n()
 const router = useRouter()
 const userStore = useUserStore()
 
@@ -70,14 +72,14 @@ const form = reactive({
   password: 'admin'
 })
 
-const rules: FormRules = {
+const rules = computed<FormRules>(() => ({
   username: [
-    { required: true, message: 'Please enter username', trigger: 'blur' }
+    { required: true, message: t('login.usernameRequired'), trigger: 'blur' }
   ],
   password: [
-    { required: true, message: 'Please enter password', trigger: 'blur' }
+    { required: true, message: t('login.passwordRequired'), trigger: 'blur' }
   ]
-}
+}))
 
 const handleLogin = async () => {
   if (!formRef.value) return
@@ -88,10 +90,10 @@ const handleLogin = async () => {
     loading.value = true
     try {
       await userStore.login(form)
-      ElMessage.success('Login successful')
+      ElMessage.success(t('login.loginSuccess'))
       router.push('/')
     } catch (error: any) {
-      ElMessage.error(error.response?.data?.error || 'Login failed')
+      ElMessage.error(error.response?.data?.error || t('login.loginFailed'))
     } finally {
       loading.value = false
     }

@@ -14,7 +14,7 @@
         :class="{ active: isActive(item.path) }"
       >
         <el-icon class="nav-icon"><component :is="item.icon" /></el-icon>
-        <span class="nav-label">{{ item.label }}</span>
+        <span class="nav-label">{{ t(item.labelKey) }}</span>
       </router-link>
     </nav>
   </div>
@@ -22,22 +22,24 @@
 
 <script setup lang="ts">
 import { useRoute } from 'vue-router'
+import { useI18n } from 'vue-i18n'
 import {
   Odometer, Connection, Files,
   Share, List, Tickets, Monitor, Setting
 } from '@element-plus/icons-vue'
 
+const { t } = useI18n()
 const route = useRoute()
 
 const navItems = [
-  { path: '/',           label: 'Dashboard',   icon: Odometer   },
-  { path: '/proxies',    label: 'Proxies',      icon: Connection },
-  { path: '/profiles',   label: 'Profiles',     icon: Files      },
-  { path: '/connections',label: 'Connections',  icon: Share      },
-  { path: '/rules',      label: 'Rules',        icon: List       },
-  { path: '/logs',       label: 'Logs',         icon: Tickets    },
-  { path: '/mihomo',     label: 'Mihomo',       icon: Monitor    },
-  { path: '/settings',   label: 'Settings',     icon: Setting    },
+  { path: '/',           labelKey: 'nav.dashboard',   icon: Odometer   },
+  { path: '/proxies',    labelKey: 'nav.proxies',      icon: Connection },
+  { path: '/profiles',   labelKey: 'nav.profiles',     icon: Files      },
+  { path: '/connections',labelKey: 'nav.connections',  icon: Share      },
+  { path: '/rules',      labelKey: 'nav.rules',        icon: List       },
+  { path: '/logs',       labelKey: 'nav.logs',         icon: Tickets    },
+  { path: '/mihomo',     labelKey: 'nav.mihomo',       icon: Monitor    },
+  { path: '/settings',   labelKey: 'nav.settings',     icon: Setting    },
 ]
 
 const isActive = (path: string) => {
