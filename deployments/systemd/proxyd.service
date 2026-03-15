@@ -6,7 +6,7 @@ Wants=network-online.target
 
 [Service]
 Type=simple
-User=nobody
+# User is set by install.sh; do not hardcode here
 WorkingDirectory=/opt/proxyd
 
 # Optional: override config via environment file (e.g. set PROXYD_LOGLEVEL=debug)
@@ -30,8 +30,9 @@ PrivateTmp=true
 ProtectSystem=strict
 ProtectHome=true
 
-# Writable paths: data, logs, mihomo config dir
-ReadWritePaths=/opt/proxyd/data /opt/proxyd/logs
+# Writable paths: data, logs, bin (mihomo download target)
+# Note: If running as non-root user, ensure these directories are owned by that user
+ReadWritePaths=/opt/proxyd/data /opt/proxyd/logs /opt/proxyd/bin
 
 # ── Logging ────────────────────────────────────────────────────────────────
 StandardOutput=journal

@@ -7,7 +7,7 @@
 #
 # Environment overrides (optional):
 #   INSTALL_DIR=/opt/proxyd   Installation prefix
-#   SERVICE_USER=nobody       Existing system user to run the service
+#   SERVICE_USER=$USER        User to run the service (default: sudo user)
 #   API_PORT=8080             proxyd API port
 #   MIHOMO_PORT=7890          Mihomo mixed-proxy port
 
@@ -15,9 +15,22 @@ set -euo pipefail
 
 # ── Defaults ──────────────────────────────────────────────────────────────────
 INSTALL_DIR="${INSTALL_DIR:-/opt/proxyd}"
-SERVICE_USER="${SERVICE_USER:-nobody}"
-# Resolve the primary group of SERVICE_USER (nogroup on Debian, nobody on RHEL)
-SERVICE_GROUP="${SERVICE_GROUP:-$(id -gn "$SERVICE_USER" 2>/dev/null || echo nobody)}"
+
+# Detect the real user (the one who ran sudo)
+if [[ -n "${SUDO_USER:-}" ]]; then
+    DETECTED_USER="$SUDO_USER"
+elif [[ -n "${USER:-}" ]]; then
+    DETECTED_USER="$USER"
+else
+    DETECTED_USER="$(whoami)"
+fi
+SERVICE_USER="${SERVICE_USER:-$DETECTED_USER}"
+
+# Resolve the primary group of SERVICE_USER
+if ! SERVICE_GROUP="$(id -gn "$SERVICE_USER" 2>/dev/null)"; then
+    echo "Error: Cannot determine group for user '$SERVICE_USER'" >&2
+    exit 1
+fi
 SERVICE_FILE="/etc/systemd/system/proxyd.service"
 API_PORT="${API_PORT:-8080}"
 MIHOMO_PORT="${MIHOMO_PORT:-7890}"
@@ -66,7 +79,10 @@ fi
 
 # Verify the service user exists
 if ! getent passwd "$SERVICE_USER" &>/dev/null; then
-    error "User '$SERVICE_USER' does not exist. Set SERVICE_USER to an existing account."
+    error "User '$SERVICE_USER' does not exist."
+    error "The service user must be a valid system account."
+    error "Set SERVICE_USER to an existing account, e.g.:"
+    error "  sudo SERVICE_USER=\$USER $0"
     exit 1
 fi
 info "Service will run as: ${SERVICE_USER}:${SERVICE_GROUP}"
@@ -74,7 +90,10 @@ info "Service will run as: ${SERVICE_USER}:${SERVICE_GROUP}"
 # ── Directory structure ───────────────────────────────────────────────────────
 step "Creating directory structure under $INSTALL_DIR"
 install -d -m 755 "$INSTALL_DIR/bin"
-install -d -m 750 -o "$SERVICE_USER" -g "$SERVICE_GROUP" \
+
+# Create data/logs directories owned by service user
+install -d -m 750 \
+    -o "$SERVICE_USER" -g "$SERVICE_GROUP" \
     "$INSTALL_DIR/data/db" \
     "$INSTALL_DIR/data/mihomo" \
     "$INSTALL_DIR/data/generated" \
@@ -160,10 +179,20 @@ YAML
 fi
 
 # ── Permissions ───────────────────────────────────────────────────────────────
+# Config file readable by service user
 chown root:"$SERVICE_GROUP" "$CONFIG_FILE"
+chmod 640 "$CONFIG_FILE"
+
+# Ensure data and logs are owned by service user
 chown -R "$SERVICE_USER":"$SERVICE_GROUP" \
     "$INSTALL_DIR/data" \
     "$INSTALL_DIR/logs"
+
+# Allow service user to write to bin directory (for mihomo auto-update)
+chown "$SERVICE_USER":"$SERVICE_GROUP" "$INSTALL_DIR/bin" || \
+    warn "Could not change ownership of $INSTALL_DIR/bin"
+# Ensure existing binaries remain root-owned but service user can write new files
+chmod 775 "$INSTALL_DIR/bin"
 
 # ── Initialise database ───────────────────────────────────────────────────────
 step "Initialising database"
@@ -208,7 +237,9 @@ NoNewPrivileges=true
 PrivateTmp=true
 ProtectSystem=strict
 ProtectHome=true
-ReadWritePaths=${INSTALL_DIR}/data ${INSTALL_DIR}/logs
+
+# Writable paths: data, logs, bin (for mihomo download target)
+ReadWritePaths=${INSTALL_DIR}/data ${INSTALL_DIR}/logs ${INSTALL_DIR}/bin
 StandardOutput=journal
 StandardError=journal
 SyslogIdentifier=proxyd

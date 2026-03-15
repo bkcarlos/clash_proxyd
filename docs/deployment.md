@@ -11,24 +11,32 @@ This guide covers various deployment options for proxyd.
 
 ## Installation Methods
 
-### Method 1: Automated Script
+### Method 1: Automated Script (Normal User - Recommended)
 
-The easiest way to install proxyd:
+The easiest way to install proxyd, running as your normal user:
 
 ```bash
 # Download and run installer
-wget https://raw.githubusercontent.com/clash-proxyd/proxyd/main/scripts/install.sh
-chmod +x install.sh
-sudo ./install.sh
+git clone https://github.com/clash-proxyd/proxyd.git
+cd proxyd
+make build-all
+sudo ./scripts/install.sh
 ```
 
-This will:
-- Install all dependencies
-- Build proxyd from source
-- Set up systemd service
-- Configure default paths
+**Key features:**
+- ✅ Service runs as your user (not `nobody`)
+- ✅ You own all data and log files
+- ✅ No permission issues with mihomo downloads
+- ✅ Can debug without root access
 
-### Method 2: Manual Installation
+The installer automatically detects your username from `SUDO_USER`.
+
+**Specify a different user:**
+```bash
+sudo SERVICE_USER=alice ./scripts/install.sh
+```
+
+### Method 2: Manual Installation with Normal User
 
 #### 1. Install Dependencies
 
@@ -80,7 +88,11 @@ Edit the configuration file according to your needs.
 #### 6. Install Systemd Service
 
 ```bash
+# Install service (runs as your user)
 sudo make install-service PREFIX=/opt/proxyd
+sudo sed -i "s/User=nobody/User=$USER/" /etc/systemd/system/proxyd.service
+
+# Enable and start
 sudo systemctl enable proxyd
 sudo systemctl start proxyd
 ```
@@ -353,9 +365,13 @@ sudo lsof -i :8080
 - Ensure runtime user can write:
 
 ```bash
-# examples
-sudo -u proxyd touch /opt/proxyd/data/db/.write-test
-sudo -u proxyd touch /etc/mihomo/.write-test
+# If running as normal user (recommended)
+touch /opt/proxyd/data/db/.write-test
+ls -la /opt/proxyd/data/db/
+
+# Fix permissions if needed
+sudo chown -R $USER:$USER /opt/proxyd/data /opt/proxyd/logs
+sudo chown root:$USER /opt/proxyd/config.yaml
 ```
 
 #### D. Login returns 401 unexpectedly
@@ -539,6 +555,7 @@ sudo certbot certonly --standalone -d proxyd.example.com
 
 ## Production Checklist
 
+- [ ] Service runs as normal user (not root/nobody)
 - [ ] Change JWT secret
 - [ ] Change default password
 - [ ] Configure HTTPS
@@ -549,3 +566,5 @@ sudo certbot certonly --standalone -d proxyd.example.com
 - [ ] Test disaster recovery
 - [ ] Document custom configurations
 - [ ] Set up update procedure
+
+**See also:** [普通用户部署指南](user-deployment.md) for detailed permission setup.
