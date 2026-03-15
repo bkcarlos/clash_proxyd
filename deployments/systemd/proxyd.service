@@ -6,8 +6,8 @@ Wants=network-online.target
 
 [Service]
 Type=simple
-User=proxyd
-Group=proxyd
+User=nobody
+Group=nobody
 WorkingDirectory=/opt/proxyd
 
 # Optional: override config via environment file (e.g. set PROXYD_LOGLEVEL=debug)

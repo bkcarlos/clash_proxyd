@@ -8,8 +8,6 @@
 set -euo pipefail
 
 INSTALL_DIR="${INSTALL_DIR:-/opt/proxyd}"
-SERVICE_USER="${SERVICE_USER:-proxyd}"
-SERVICE_GROUP="${SERVICE_GROUP:-proxyd}"
 SERVICE_FILE="/etc/systemd/system/proxyd.service"
 
 RED='\033[0;31m'; GREEN='\033[0;32m'; YELLOW='\033[1;33m'; CYAN='\033[0;36m'; NC='\033[0m'
@@ -71,16 +69,6 @@ if [[ "$PURGE" == true ]]; then
     if [[ -d "$INSTALL_DIR" ]]; then
         rm -rf "$INSTALL_DIR"
         info "Removed: $INSTALL_DIR"
-    fi
-
-    step "Removing system user and group"
-    if getent passwd "$SERVICE_USER" &>/dev/null; then
-        userdel "$SERVICE_USER"
-        info "Removed user: $SERVICE_USER"
-    fi
-    if getent group "$SERVICE_GROUP" &>/dev/null; then
-        groupdel "$SERVICE_GROUP" 2>/dev/null || true
-        info "Removed group: $SERVICE_GROUP"
     fi
 else
     warn "Data preserved at $INSTALL_DIR/data and $INSTALL_DIR/logs."
