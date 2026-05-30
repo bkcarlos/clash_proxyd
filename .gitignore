@@ -1,5 +1,7 @@
 # Binaries
-proxyd
+# Anchor binary names to the repo root: a bare "proxyd" pattern also matches
+# the cmd/proxyd/ source directory and silently excludes the entry point.
+/proxyd
 !release/proxyd
 *.exe
 *.dll

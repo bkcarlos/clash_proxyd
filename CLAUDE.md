@@ -23,7 +23,7 @@ Three-layer system: **mihomo** (Clash Meta, proxy protocol engine) ← **proxyd*
 
 ### Backend (`cmd/`, `internal/`, `pkg/`)
 
-- **`cmd/proxyd/main.go`** — entry point; parses CLI flags, loads config, bootstraps `internal/app`.
+- **`cmd/proxyd/main.go`** — entry point; parses CLI flags (`-c`, `-init-db`, `-web`, `-check`, `-version`, `-mihomo`), loads config, bootstraps `internal/app`.
 - **`internal/app/app.go`** — wires all components together and manages lifecycle (init → run → shutdown).
 - **`pkg/config/config.go`** — loads YAML config file; `Config` struct covers Server, Database, Mihomo, Auth, Logging, Subscription, Policy, Scheduler sections.
 - **`internal/types/types.go`** — all shared data types (Source, Revision, Runtime, AuditLog, ProxyInfo, etc.).
@@ -33,14 +33,14 @@ Key internal packages and their roles:
 | Package | Role |
 |---|---|
 | `internal/store` | SQLite CRUD via 5 stores: SourceStore, SettingStore, RevisionStore, RuntimeStore, AuditStore |
-| `internal/auth` | JWT generation/validation; credentials stored in settings table; **password hashing is MVP placeholder (plain text)** |
+| `internal/auth` | JWT generation/validation; credentials stored in settings table; passwords hashed with **bcrypt** (legacy plain-text passwords migrated to bcrypt on first successful login) |
 | `internal/core` | Mihomo process lifecycle (`manager.go`), Mihomo REST API client (`client.go`), binary auto-updater (`updater.go`) |
 | `internal/source` | HTTP/file subscription fetching with retry logic |
 | `internal/parser` | YAML parse, validate, merge multiple configs |
 | `internal/renderer` | Merge sources + apply policy settings → runtime YAML |
 | `internal/policy` | Generate proxy groups (select/url-test/fallback/load-balance) and rules |
 | `internal/scheduler` | `robfig/cron` jobs for periodic source refresh |
-| `internal/health` | Health checker exposed at `/health`; `StopPeriodicCheck()` is currently a no-op |
+| `internal/health` | Health checker exposed at `/health`; periodic checks stoppable via `StopPeriodicCheck()` |
 | `internal/api` | Gin router + handlers; WebSocket at `/api/v1/system/ws` |
 | `internal/logx` | `go.uber.org/zap` with `lumberjack` log rotation |
 
@@ -95,11 +95,17 @@ Vue 3 + Vite + Pinia + Vue Router + Element Plus + TypeScript.
 
 Frontend dev server proxies API calls to backend; configure in `vite.config.ts`.
 
-## Known issues / MVP placeholders
+## Implementation notes
 
-- `internal/auth/jwt.go` `HashPassword()` and `comparePassword()` — plain-text password storage; must replace with `bcrypt` before production.
-- `internal/health/checker.go` `StopPeriodicCheck()` — empty no-op; health check ticker cannot be stopped once started.
-- `proxyDelayCache` in handler has a 15-second TTL to deduplicate proxy latency test calls.
+- `internal/auth/jwt.go` — passwords are hashed with `bcrypt`; a legacy plain-text password is transparently re-hashed to bcrypt on the next successful login.
+- `internal/health/checker.go` `StopPeriodicCheck()` stops the periodic health-check ticker.
+- `proxyDelayCache` in the proxy handler has a 15-second TTL to deduplicate proxy latency test calls.
+
+## Build & platform notes
+
+- **Linux-only backend:** `internal/core/process.go` uses `SysProcAttr.Pdeathsig`, which is Linux-specific, so the Go backend compiles and runs only on Linux (not macOS/Windows). Build on a Linux host/CI or via the `Dockerfile`.
+- CGO is required (SQLite via `mattn/go-sqlite3`); the Makefile sets `CGO_ENABLED=1`. The build entry point is `./cmd/proxyd`.
+- `release/proxyd` is a committed prebuilt Linux x86-64 binary used for distribution. Keep binary-ignore patterns in `.gitignore` anchored (e.g. `/proxyd`, not a bare `proxyd`) so they don't exclude the `cmd/proxyd/` source directory.
 
 ## Runtime data layout
 
