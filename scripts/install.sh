@@ -56,12 +56,11 @@ BINARY_SRC="${1:-}"
 if [[ -z "$BINARY_SRC" ]]; then
     if [[ -x "$REPO_ROOT/build/proxyd" ]]; then
         BINARY_SRC="$REPO_ROOT/build/proxyd"
-    elif [[ -x "$REPO_ROOT/release/proxyd" ]]; then
-        BINARY_SRC="$REPO_ROOT/release/proxyd"
     else
-        error "No pre-built binary found."
-        error "Run 'make build-all' first, or pass the binary path as an argument:"
+        error "No pre-built binary found at $REPO_ROOT/build/proxyd."
+        error "Build it first ('make build-all'), or pass a binary path:"
         error "  sudo $0 /path/to/proxyd"
+        error "To install a published release instead (no build needed): scripts/deploy.sh"
         exit 1
     fi
 fi
