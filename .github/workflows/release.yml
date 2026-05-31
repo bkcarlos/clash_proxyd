@@ -1,6 +1,8 @@
 name: Release
 
-# Build and publish release binaries when a v* tag is pushed.
+# Build and publish self-contained release binaries when a v* tag is pushed.
+# The binary bundles the web UI + the mihomo core + Country.mmdb (-tags
+# webui,bundle); proxyd extracts mihomo/MMDB to disk on first run.
 # Also runnable manually (workflow_dispatch) by supplying a tag name.
 on:
   push:
@@ -15,9 +17,13 @@ on:
 permissions:
   contents: write
 
+env:
+  # Country.mmdb source (matches the in-app MMDB download default).
+  MMDB_URL: https://github.com/MetaCubeX/meta-rules-dat/releases/download/latest/country.mmdb
+
 jobs:
   release:
-    name: Build & release (linux amd64 + arm64)
+    name: Build & release (linux amd64 + arm64, bundled)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -55,19 +61,34 @@ jobs:
           rm -rf internal/webui/dist
           cp -r web-ui/dist internal/webui/dist
 
+      - name: Fetch Country.mmdb (embedded by -tags bundle)
+        run: curl -fsSL -o internal/assets/Country.mmdb "$MMDB_URL"
+
       - name: Vet
         run: go vet ./...
 
-      - name: Build binaries (CGO, embedded web UI)
+      - name: Build self-contained binaries (web UI + mihomo + MMDB embedded)
         env:
           CGO_ENABLED: '1'
           GOOS: linux
         run: |
           VER="${{ steps.ver.outputs.version }}"
           LDFLAGS="-s -w -X main.version=${VER}"
-          GOARCH=amd64 CC=gcc go build -tags webui -trimpath -ldflags "$LDFLAGS" -o dist/amd64/proxyd ./cmd/proxyd
+          MTAG=$(curl -fsSL https://api.github.com/repos/MetaCubeX/mihomo/releases/latest \
+            | python3 -c "import sys,json;print(json.load(sys.stdin)['tag_name'])")
+          echo "Bundling mihomo ${MTAG}"
+          build_one() {
+            arch="$1"; cc="$2"
+            # Embed the matching-arch mihomo core for this build.
+            curl -fsSL "https://github.com/MetaCubeX/mihomo/releases/download/${MTAG}/mihomo-linux-${arch}-${MTAG}.gz" \
+              | gunzip > internal/assets/mihomo
+            GOARCH="$arch" CC="$cc" go build -tags webui,bundle -trimpath \
+              -ldflags "$LDFLAGS" -o "dist/${arch}/proxyd" ./cmd/proxyd
+            ls -lh "dist/${arch}/proxyd"
+          }
+          build_one amd64 gcc
           ./dist/amd64/proxyd -version
-          GOARCH=arm64 CC=aarch64-linux-gnu-gcc go build -tags webui -trimpath -ldflags "$LDFLAGS" -o dist/arm64/proxyd ./cmd/proxyd
+          build_one arm64 aarch64-linux-gnu-gcc
           file dist/amd64/proxyd dist/arm64/proxyd
 
       - name: Package
@@ -83,7 +104,7 @@ jobs:
             tar -czf "${NAME}.tar.gz" "$NAME"
             sha256sum "${NAME}.tar.gz" > "${NAME}.tar.gz.sha256"
           done
-          ls -la proxyd_*_linux_*.tar.gz*
+          ls -lh proxyd_*_linux_*.tar.gz*
 
       - name: Publish GitHub Release
         uses: softprops/action-gh-release@v2

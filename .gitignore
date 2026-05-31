@@ -67,5 +67,9 @@ build/logs/
 proxyd_*_linux_*.tar.gz
 proxyd_*_linux_*.tar.gz.sha256
 
+# Bundled assets fetched at build time (-tags bundle); never commit these
+internal/assets/mihomo
+internal/assets/Country.mmdb
+
 # Test / dev config (contains local secrets)
 config.test.yaml
