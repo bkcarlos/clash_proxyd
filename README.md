@@ -194,6 +194,20 @@ sudo ./scripts/install.sh        # 使用 ./build/proxyd 安装到 /opt/proxyd
 
 详细指南见 [docs/deployment.md](docs/deployment.md)。
 
+### 命令行导入订阅
+
+无需打开 Web UI,直接用 proxyd 二进制导入订阅(写入数据库并抓取内容):
+
+```bash
+# 添加并立即生效(默认会重载正在运行的 mihomo)
+/opt/proxyd/bin/proxyd -c /opt/proxyd/config.yaml -add-source 'https://example.com/sub'
+
+# 指定名称;只添加不下发(之后在 UI 应用,或去掉 -apply=false)
+/opt/proxyd/bin/proxyd -c /opt/proxyd/config.yaml -add-source 'https://example.com/sub' -name my-sub -apply=false
+```
+
+`-apply`(默认开启)会汇总所有启用的订阅重新生成配置,并通过 mihomo 控制器 API 就地重载正在运行的实例。
+
 ### 开发测试
 
 ```bash
@@ -403,6 +417,20 @@ sudo ./scripts/install.sh        # installs ./build/proxyd to /opt/proxyd
 ```
 
 See [docs/deployment.md](docs/deployment.md) for details.
+
+### Import a subscription via the CLI
+
+Add a subscription straight from the proxyd binary (writes to the DB and fetches the content) — no Web UI needed:
+
+```bash
+# add and apply immediately (reloads the running mihomo by default)
+/opt/proxyd/bin/proxyd -c /opt/proxyd/config.yaml -add-source 'https://example.com/sub'
+
+# custom name; add only, don't apply (apply later in the UI, or drop -apply=false)
+/opt/proxyd/bin/proxyd -c /opt/proxyd/config.yaml -add-source 'https://example.com/sub' -name my-sub -apply=false
+```
+
+`-apply` (on by default) regenerates the config from all enabled sources and reloads the running mihomo in place via its controller API.
 
 ### Testing
 
