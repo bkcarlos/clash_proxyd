@@ -1,6 +1,6 @@
 name: Release
 
-# Build and publish a release binary when a v* tag is pushed.
+# Build and publish release binaries when a v* tag is pushed.
 # Also runnable manually (workflow_dispatch) by supplying a tag name.
 on:
   push:
@@ -17,7 +17,7 @@ permissions:
 
 jobs:
   release:
-    name: Build & release (linux/amd64)
+    name: Build & release (linux amd64 + arm64)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -42,6 +42,9 @@ jobs:
           cache: npm
           cache-dependency-path: web-ui/package-lock.json
 
+      - name: Install arm64 cross toolchain
+        run: sudo apt-get update && sudo apt-get install -y gcc-aarch64-linux-gnu
+
       - name: Build web UI
         run: |
           npm --prefix web-ui ci
@@ -55,31 +58,32 @@ jobs:
       - name: Vet
         run: go vet ./...
 
-      - name: Build proxyd (CGO, embedded web UI)
+      - name: Build binaries (CGO, embedded web UI)
         env:
           CGO_ENABLED: '1'
           GOOS: linux
-          GOARCH: amd64
-        run: |
-          mkdir -p dist
-          go build -tags webui -trimpath \
-            -ldflags "-s -w -X main.version=${{ steps.ver.outputs.version }}" \
-            -o dist/proxyd ./cmd/proxyd
-          ./dist/proxyd -version
-
-      - name: Package
-        id: pkg
         run: |
           VER="${{ steps.ver.outputs.version }}"
-          NAME="proxyd_${VER}_linux_amd64"
-          mkdir -p "$NAME"
-          cp dist/proxyd "$NAME/proxyd"
-          cp config.example.yaml "$NAME/config.yaml.example"
-          cp README.md LICENSE "$NAME/"
-          cp deployments/systemd/proxyd.service "$NAME/"
-          tar -czf "${NAME}.tar.gz" "$NAME"
-          sha256sum "${NAME}.tar.gz" > "${NAME}.tar.gz.sha256"
-          ls -la "${NAME}.tar.gz" "${NAME}.tar.gz.sha256"
+          LDFLAGS="-s -w -X main.version=${VER}"
+          GOARCH=amd64 CC=gcc go build -tags webui -trimpath -ldflags "$LDFLAGS" -o dist/amd64/proxyd ./cmd/proxyd
+          ./dist/amd64/proxyd -version
+          GOARCH=arm64 CC=aarch64-linux-gnu-gcc go build -tags webui -trimpath -ldflags "$LDFLAGS" -o dist/arm64/proxyd ./cmd/proxyd
+          file dist/amd64/proxyd dist/arm64/proxyd
+
+      - name: Package
+        run: |
+          VER="${{ steps.ver.outputs.version }}"
+          for arch in amd64 arm64; do
+            NAME="proxyd_${VER}_linux_${arch}"
+            mkdir -p "$NAME"
+            cp "dist/${arch}/proxyd" "$NAME/proxyd"
+            cp config.example.yaml "$NAME/config.yaml.example"
+            cp README.md LICENSE "$NAME/"
+            cp deployments/systemd/proxyd.service "$NAME/"
+            tar -czf "${NAME}.tar.gz" "$NAME"
+            sha256sum "${NAME}.tar.gz" > "${NAME}.tar.gz.sha256"
+          done
+          ls -la proxyd_*_linux_*.tar.gz*
 
       - name: Publish GitHub Release
         uses: softprops/action-gh-release@v2
@@ -89,5 +93,5 @@ jobs:
           generate_release_notes: true
           fail_on_unmatched_files: true
           files: |
-            proxyd_*_linux_amd64.tar.gz
-            proxyd_*_linux_amd64.tar.gz.sha256
+            proxyd_*_linux_*.tar.gz
+            proxyd_*_linux_*.tar.gz.sha256
