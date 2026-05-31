@@ -46,6 +46,28 @@ mihomo (代理协议引擎)  ←  proxyd (Go 控制面)  ←  Vue 3 Web UI
 
 ### 快速开始
 
+#### 一键安装(推荐)
+
+无需克隆仓库或自行编译。脚本会自动下载最新 Release(自包含二进制,已内置 mihomo 内核与 Country.mmdb),安装到 `/opt/proxyd` 并注册为 systemd 服务——全程使用绝对路径,与运行目录无关,支持 amd64 / arm64:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/bkcarlos/clash_proxyd/master/scripts/deploy.sh | sudo bash
+```
+
+完成后访问 `http://127.0.0.1:8080`,默认账号 `admin` / `admin`(**请立即修改密码**)。
+
+需要自定义版本 / 安装目录 / 监听地址时,先下载再带参数运行:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/bkcarlos/clash_proxyd/master/scripts/deploy.sh -o deploy.sh
+# VERSION 版本 · INSTALL_DIR 安装目录 · BIND_HOST 监听地址(0.0.0.0 = 允许 LAN 访问) · API_PORT 端口
+sudo VERSION=v1.0.2 BIND_HOST=0.0.0.0 API_PORT=8080 bash deploy.sh
+```
+
+服务管理:`systemctl {status,restart,stop} proxyd`;查看日志:`journalctl -u proxyd -f`。
+
+> 也可从 [Releases 页面](https://github.com/bkcarlos/clash_proxyd/releases) 手动下载对应架构的 `proxyd_<版本>_linux_<arch>.tar.gz`。以下是从源码构建的方式(面向开发者)。
+
 #### 前置要求
 
 - Go 1.22+
@@ -140,19 +162,19 @@ logging:
 
 ### 部署
 
-```bash
-# 复制二进制和配置
-sudo cp build/proxyd /usr/local/bin/proxyd
-sudo mkdir -p /etc/proxyd /var/lib/proxyd /var/log/proxyd
-sudo cp config.yaml /etc/proxyd/config.yaml
+**方式一 · 一键脚本(推荐):** 下载 Release 并自动配置 systemd 服务(同上文「一键安装」):
 
-# 安装 systemd 服务
-sudo cp deployments/systemd/proxyd.service /etc/systemd/system/
-sudo systemctl daemon-reload
-sudo systemctl enable --now proxyd
+```bash
+curl -fsSL https://raw.githubusercontent.com/bkcarlos/clash_proxyd/master/scripts/deploy.sh | sudo bash
 ```
 
-详细部署指南见 [docs/deployment.md](docs/deployment.md)。
+**方式二 · 从本地构建安装:** 先 `make build-all`,再运行仓库内的安装脚本:
+
+```bash
+sudo ./scripts/install.sh        # 使用 ./build/proxyd 安装到 /opt/proxyd
+```
+
+两种方式都会安装到固定前缀(默认 `/opt/proxyd`)、写入绝对路径配置与随机 `jwt_secret`、创建服务用户并设置开机自启;服务以绝对路径运行,与当前目录无关。详细指南见 [docs/deployment.md](docs/deployment.md)。
 
 ### 开发测试
 
@@ -215,6 +237,28 @@ mihomo (proxy engine)  ←  proxyd (Go control plane)  ←  Vue 3 Web UI
 | Web UI | Browser interface, communicates with proxyd via `/api/v1` |
 
 ### Quick Start
+
+#### One-line install (recommended)
+
+No clone or build required. The script downloads the latest release (a self-contained binary with the mihomo core and Country.mmdb bundled in), installs it to `/opt/proxyd`, and registers a systemd service — using absolute paths, independent of the working directory, for amd64 / arm64:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/bkcarlos/clash_proxyd/master/scripts/deploy.sh | sudo bash
+```
+
+Then open `http://127.0.0.1:8080` (default login `admin` / `admin` — **change it immediately**).
+
+To customise the version / install dir / listen address, download first and pass env vars:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/bkcarlos/clash_proxyd/master/scripts/deploy.sh -o deploy.sh
+# VERSION · INSTALL_DIR · BIND_HOST (0.0.0.0 = expose on LAN) · API_PORT
+sudo VERSION=v1.0.2 BIND_HOST=0.0.0.0 API_PORT=8080 bash deploy.sh
+```
+
+Manage: `systemctl {status,restart,stop} proxyd`; logs: `journalctl -u proxyd -f`.
+
+> You can also download `proxyd_<version>_linux_<arch>.tar.gz` for your arch from the [Releases page](https://github.com/bkcarlos/clash_proxyd/releases). The steps below are for building from source (developers).
 
 #### Prerequisites
 
@@ -310,19 +354,19 @@ All routes are prefixed with `/api/v1`. JWT is required except for `/health`, `/
 
 ### Deployment
 
-```bash
-# Copy binary and config
-sudo cp build/proxyd /usr/local/bin/proxyd
-sudo mkdir -p /etc/proxyd /var/lib/proxyd /var/log/proxyd
-sudo cp config.yaml /etc/proxyd/config.yaml
+**Option 1 · one-line script (recommended):** downloads a release and sets up the systemd service (same as "One-line install" above):
 
-# Install systemd service
-sudo cp deployments/systemd/proxyd.service /etc/systemd/system/
-sudo systemctl daemon-reload
-sudo systemctl enable --now proxyd
+```bash
+curl -fsSL https://raw.githubusercontent.com/bkcarlos/clash_proxyd/master/scripts/deploy.sh | sudo bash
 ```
 
-See [docs/deployment.md](docs/deployment.md) for the full deployment guide.
+**Option 2 · install from a local build:** run `make build-all`, then the bundled installer:
+
+```bash
+sudo ./scripts/install.sh        # installs ./build/proxyd to /opt/proxyd
+```
+
+Both install under a fixed prefix (default `/opt/proxyd`), write an absolute-path config with a random `jwt_secret`, create a service user, and enable start-on-boot; the service runs with absolute paths, independent of the current directory. See [docs/deployment.md](docs/deployment.md) for details.
 
 ### Testing
 
