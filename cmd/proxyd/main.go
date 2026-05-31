@@ -20,8 +20,9 @@ import (
 	"github.com/clash-proxyd/proxyd/pkg/config"
 )
 
-// version is the proxyd release version. Keep in sync with internal/app.
-const version = "1.0.0"
+// version is the proxyd release version. Overridable at build time via
+// -ldflags "-X main.version=<tag>" (set by the release workflow).
+var version = "1.0.0"
 
 func main() {
 	var (

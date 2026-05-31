@@ -2,7 +2,7 @@
 # Anchor binary names to the repo root: a bare "proxyd" pattern also matches
 # the cmd/proxyd/ source directory and silently excludes the entry point.
 /proxyd
-!release/proxyd
+/release/proxyd
 *.exe
 *.dll
 *.so
@@ -61,6 +61,11 @@ build/mihomo.bak
 build/mihomo*.gz
 build/data/
 build/logs/
+
+# Release packaging artifacts (CI and local release builds)
+/dist/
+proxyd_*_linux_*.tar.gz
+proxyd_*_linux_*.tar.gz.sha256
 
 # Test / dev config (contains local secrets)
 config.test.yaml

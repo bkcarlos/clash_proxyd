@@ -105,7 +105,7 @@ Frontend dev server proxies API calls to backend; configure in `vite.config.ts`.
 
 - **Linux-only backend:** `internal/core/process.go` uses `SysProcAttr.Pdeathsig`, which is Linux-specific, so the Go backend compiles and runs only on Linux (not macOS/Windows). Build on a Linux host/CI or via the `Dockerfile`.
 - CGO is required (SQLite via `mattn/go-sqlite3`); the Makefile sets `CGO_ENABLED=1`. The build entry point is `./cmd/proxyd`.
-- `release/proxyd` is a committed prebuilt Linux x86-64 binary used for distribution. Keep binary-ignore patterns in `.gitignore` anchored (e.g. `/proxyd`, not a bare `proxyd`) so they don't exclude the `cmd/proxyd/` source directory.
+- Release binaries are built and published by GitHub Actions (`.github/workflows/release.yml`) on `v*` tags: a CGO `linux/amd64` build with the web UI embedded (`-tags webui`), packaged as `proxyd_<tag>_linux_amd64.tar.gz`. The binary is no longer committed to the repo (mihomo is fetched at runtime, matching `scripts/install.sh`). Keep binary-ignore patterns in `.gitignore` anchored (e.g. `/proxyd`, not a bare `proxyd`) so they don't exclude the `cmd/proxyd/` source directory.
 
 ## Runtime data layout
 
