@@ -52,9 +52,17 @@ step()  { echo -e "\n${CYAN}▶ $*${NC}"; }
 # ── Pre-flight ──────────────────────────────────────────────────────────────
 [[ $EUID -eq 0 ]] || { error "Run with sudo or as root."; exit 1; }
 
-for cmd in curl tar systemctl install; do
+for cmd in curl tar install; do
     command -v "$cmd" >/dev/null 2>&1 || { error "Required command not found: $cmd"; exit 1; }
 done
+
+# Run a command as another user: sudo → runuser → (last resort) current user.
+run_as() {
+    local u="$1"; shift
+    if command -v sudo >/dev/null 2>&1; then sudo -u "$u" "$@"
+    elif command -v runuser >/dev/null 2>&1; then runuser -u "$u" -- "$@"
+    else "$@"; fi
+}
 
 # sha256 tool (Linux: sha256sum; fall back to shasum -a 256)
 if command -v sha256sum >/dev/null 2>&1; then
@@ -256,12 +264,18 @@ chmod 775 "$INSTALL_DIR/bin"
 # ── Initialise database ─────────────────────────────────────────────────────
 if [[ ! -f "$INSTALL_DIR/data/db/proxyd.db" ]]; then
     step "Initialising database"
-    sudo -u "$SERVICE_USER" "$INSTALL_DIR/bin/proxyd" -c "$CONFIG_FILE" -init-db
+    run_as "$SERVICE_USER" "$INSTALL_DIR/bin/proxyd" -c "$CONFIG_FILE" -init-db
 fi
 
 # ── systemd unit (absolute paths → CWD-independent) ─────────────────────────
-step "Installing systemd service"
-cat > "$SERVICE_FILE" <<UNIT
+# Only when systemd is the init system. Docker containers usually are NOT booted
+# with systemd, so calling `systemctl` there fails with "System has not been
+# booted with systemd as init system (PID 1)". In that case we still install the
+# files and print how to run proxyd directly, instead of erroring out.
+RUN_HINT="$INSTALL_DIR/bin/proxyd -c $INSTALL_DIR/config.yaml -web"
+if [[ -d /run/systemd/system ]] && command -v systemctl >/dev/null 2>&1; then
+    step "Installing systemd service"
+    cat > "$SERVICE_FILE" <<UNIT
 [Unit]
 Description=Proxyd - Mihomo Proxy Manager
 Documentation=https://github.com/${REPO}
@@ -290,16 +304,20 @@ SyslogIdentifier=proxyd
 [Install]
 WantedBy=multi-user.target
 UNIT
-chmod 644 "$SERVICE_FILE"
-
-systemctl daemon-reload
-systemctl enable proxyd >/dev/null 2>&1 || true
-
-step "Starting service"
-if systemctl is-active --quiet proxyd; then
-    systemctl restart proxyd
+    chmod 644 "$SERVICE_FILE"
+    systemctl daemon-reload
+    systemctl enable proxyd >/dev/null 2>&1 || true
+    step "Starting service"
+    if systemctl is-active --quiet proxyd; then
+        systemctl restart proxyd
+    else
+        systemctl start proxyd
+    fi
+    SERVICE_SETUP=true
 else
-    systemctl start proxyd
+    warn "systemd not detected (e.g. inside a Docker container) — skipping service setup."
+    warn "For containers, prefer the Docker image (see README / Dockerfile)."
+    SERVICE_SETUP=false
 fi
 
 # ── Summary ─────────────────────────────────────────────────────────────────
@@ -307,7 +325,12 @@ echo ""
 echo -e "${GREEN}proxyd ${VERSION} installed.${NC}"
 echo -e "  Web UI : http://${BIND_HOST}:${API_PORT}   (login: admin / admin — change it!)"
 echo -e "  Config : ${CONFIG_FILE}"
-echo -e "  Logs   : journalctl -u proxyd -f"
-echo -e "  Manage : systemctl {status,restart,stop} proxyd"
+if [[ "$SERVICE_SETUP" == true ]]; then
+    echo -e "  Logs   : journalctl -u proxyd -f"
+    echo -e "  Manage : systemctl {status,restart,stop} proxyd"
+else
+    echo -e "  Run    : ${RUN_HINT}"
+    echo -e "  ${YELLOW}Note:${NC} no systemd here — start proxyd yourself (command above), or use the Docker image for containers."
+fi
 [[ "$BIND_HOST" == "127.0.0.1" ]] && \
     echo -e "  ${YELLOW}Note:${NC} UI bound to localhost. Use an SSH tunnel/reverse proxy, or re-run with BIND_HOST=0.0.0.0."
