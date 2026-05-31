@@ -173,12 +173,15 @@ curl -fsSL https://raw.githubusercontent.com/bkcarlos/clash_proxyd/master/script
 **方式二 · 离线 / 直接部署(本地压缩包,适合无法访问 GitHub 的服务器):**
 
 ```bash
-# 1) 在能访问 GitHub 的机器上,从 Releases 下载对应架构的包(及可选 .sha256):
-#    https://github.com/bkcarlos/clash_proxyd/releases
-#    例如 amd64:proxyd_v1.0.2_linux_amd64.tar.gz
-# 2) 把压缩包和 scripts/deploy.sh 拷到目标服务器的同一目录,然后:
-sudo ./deploy.sh                                   # 自动识别同目录下的 proxyd_*_linux_<arch>.tar.gz
-sudo ./deploy.sh proxyd_v1.0.2_linux_amd64.tar.gz  # 或显式指定压缩包路径
+# 1) 在能访问 GitHub 的机器上,下载 deploy.sh 和对应架构的发布包(及可选 .sha256)。
+#    下例为 amd64 / v1.0.2;arm64 把 amd64 换成 arm64,版本号按需替换:
+curl -fLO https://raw.githubusercontent.com/bkcarlos/clash_proxyd/master/scripts/deploy.sh
+curl -fLO https://github.com/bkcarlos/clash_proxyd/releases/download/v1.0.2/proxyd_v1.0.2_linux_amd64.tar.gz
+curl -fLO https://github.com/bkcarlos/clash_proxyd/releases/download/v1.0.2/proxyd_v1.0.2_linux_amd64.tar.gz.sha256
+
+# 2) 把这几个文件拷到目标服务器的同一目录,在该目录运行(deploy.sh 会优先用本地包):
+sudo bash deploy.sh                                     # 自动识别同目录下的 proxyd_*_linux_<arch>.tar.gz
+sudo bash deploy.sh proxyd_v1.0.2_linux_amd64.tar.gz    # 或显式指定压缩包
 ```
 
 > 自包含二进制已内置 mihomo 内核与 Country.mmdb,**安装与运行全程都无需访问 GitHub**。
@@ -380,11 +383,15 @@ curl -fsSL https://raw.githubusercontent.com/bkcarlos/clash_proxyd/master/script
 **Option 2 · offline / direct deploy (local tarball — for servers that can't reach GitHub):**
 
 ```bash
-# 1) On a machine with GitHub access, download the arch tarball (and optional .sha256):
-#    https://github.com/bkcarlos/clash_proxyd/releases   (e.g. proxyd_v1.0.2_linux_amd64.tar.gz)
-# 2) Copy the tarball + scripts/deploy.sh into one dir on the target server, then:
-sudo ./deploy.sh                                   # auto-detects ./proxyd_*_linux_<arch>.tar.gz
-sudo ./deploy.sh proxyd_v1.0.2_linux_amd64.tar.gz  # or pass the tarball explicitly
+# 1) On a machine with GitHub access, download deploy.sh + the release for your arch
+#    (and optional .sha256). Example below is amd64 / v1.0.2 — use arm64 / another tag as needed:
+curl -fLO https://raw.githubusercontent.com/bkcarlos/clash_proxyd/master/scripts/deploy.sh
+curl -fLO https://github.com/bkcarlos/clash_proxyd/releases/download/v1.0.2/proxyd_v1.0.2_linux_amd64.tar.gz
+curl -fLO https://github.com/bkcarlos/clash_proxyd/releases/download/v1.0.2/proxyd_v1.0.2_linux_amd64.tar.gz.sha256
+
+# 2) Copy these files into one dir on the target server, then run there (local pkg is used first):
+sudo bash deploy.sh                                     # auto-detects ./proxyd_*_linux_<arch>.tar.gz
+sudo bash deploy.sh proxyd_v1.0.2_linux_amd64.tar.gz    # or pass the tarball explicitly
 ```
 
 > The self-contained binary bundles the mihomo core + Country.mmdb, so **no GitHub access is needed at install or runtime**.
