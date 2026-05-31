@@ -74,7 +74,12 @@ func main() {
 		return
 	}
 
-	// Normal daemon mode.
+	// Normal daemon mode: validate config (rejects empty/placeholder JWT secret,
+	// bad port, etc.) before doing any startup work.
+	if err := cfg.Validate(); err != nil {
+		fatalf("config validation failed: %v", err)
+	}
+
 	application, err := app.New(cfg)
 	if err != nil {
 		fatalf("failed to initialize application: %v", err)

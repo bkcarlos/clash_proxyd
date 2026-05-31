@@ -68,6 +68,7 @@ CREATE INDEX IF NOT EXISTS idx_sources_priority ON sources(priority);
 CREATE INDEX IF NOT EXISTS idx_revisions_created_at ON revisions(created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_runtime_status ON runtime(status);
 CREATE INDEX IF NOT EXISTS idx_audit_logs_created_at ON audit_logs(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_audit_logs_resource_action ON audit_logs(resource, action, created_at DESC);
 
 -- Insert default settings
 INSERT OR IGNORE INTO settings (key, value, description) VALUES

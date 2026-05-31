@@ -150,3 +150,39 @@ func (a *AuditStore) Count() (int64, error) {
 	}
 	return count, nil
 }
+
+// LatestByResourceActionPrefix returns the most recent audit log matching the
+// given resource and action prefix, or (nil, nil) when none exists. This avoids
+// scanning hundreds of rows on the hot per-second WebSocket snapshot path.
+func (a *AuditStore) LatestByResourceActionPrefix(resource, actionPrefix string) (*types.AuditLog, error) {
+	query := `
+		SELECT id, user, action, resource, details, ip_address, created_at
+		FROM audit_logs
+		WHERE resource = ? AND action LIKE ? || '%'
+		ORDER BY created_at DESC LIMIT 1
+	`
+	var log types.AuditLog
+	var user, res, details, ipAddress sql.NullString
+	err := a.db.QueryRow(query, resource, actionPrefix).Scan(
+		&log.ID, &user, &log.Action, &res, &details, &ipAddress, &log.CreatedAt,
+	)
+	if err == sql.ErrNoRows {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("failed to query latest audit log: %w", err)
+	}
+	if user.Valid {
+		log.User = user.String
+	}
+	if res.Valid {
+		log.Resource = res.String
+	}
+	if details.Valid {
+		log.Details = details.String
+	}
+	if ipAddress.Valid {
+		log.IPAddress = ipAddress.String
+	}
+	return &log, nil
+}

@@ -1,6 +1,7 @@
 package api
 
 import (
+	"strings"
 	"testing"
 	"time"
 
@@ -12,11 +13,16 @@ type fakeAuditStore struct {
 	err  error
 }
 
-func (f fakeAuditStore) List(limit, offset int) ([]types.AuditLog, error) {
+func (f fakeAuditStore) LatestByResourceActionPrefix(resource, actionPrefix string) (*types.AuditLog, error) {
 	if f.err != nil {
 		return nil, f.err
 	}
-	return f.logs, nil
+	for i := range f.logs {
+		if f.logs[i].Resource == resource && strings.HasPrefix(f.logs[i].Action, actionPrefix) {
+			return &f.logs[i], nil
+		}
+	}
+	return nil, nil
 }
 
 func TestLastAutoUpdateSummary(t *testing.T) {

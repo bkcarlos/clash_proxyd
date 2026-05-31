@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
-	"os"
 	"path/filepath"
 	"testing"
 
@@ -28,11 +27,8 @@ func setupRouter(t *testing.T) (*gin.Engine, *store.SettingStore) {
 	}
 	t.Cleanup(func() { _ = db.Close() })
 
-	schema, err := os.ReadFile(filepath.Join("..", "store", "schema.sql"))
-	if err != nil {
-		t.Fatalf("read schema failed: %v", err)
-	}
-	if err := db.InitSchema(string(schema)); err != nil {
+	// NewDB already auto-initializes the embedded schema; this is idempotent.
+	if err := db.InitSchema(); err != nil {
 		t.Fatalf("init schema failed: %v", err)
 	}
 
@@ -60,9 +56,15 @@ func setupRouter(t *testing.T) (*gin.Engine, *store.SettingStore) {
 		nil,
 		tmpDir,
 		7890,
+		"",           // log file path
+		tmpDir,       // mihomo log dir
+		"clash.meta", // subscription user agent
+		30,           // subscription timeout (s)
+		3,            // subscription max retries
+		5,            // subscription retry delay (s)
 	)
 
-	return h.SetupRouter(authManager, []string{"*"}), settingStore
+	return h.SetupRouter(authManager, []string{"*"}, nil), settingStore
 }
 
 func doJSONRequest(t *testing.T, router http.Handler, method, path string, body any, token string) *httptest.ResponseRecorder {

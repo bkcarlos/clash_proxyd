@@ -358,7 +358,7 @@ func (h *Handler) ListRevisions(c *gin.Context) {
 		limit = l
 	}
 
-	revisions, err := h.revisionStore.List(limit)
+	revisions, err := h.revisionStore.ListSummary(limit)
 	if err != nil {
 		h.respondError(c, http.StatusInternalServerError, "Failed to get revisions")
 		return

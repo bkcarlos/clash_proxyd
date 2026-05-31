@@ -26,22 +26,24 @@ func NewDB(path string, foreignKeys bool) (*DB, error) {
 		return nil, fmt.Errorf("failed to create database directory: %w", err)
 	}
 
-	// Open database connection
-	db, err := sql.Open("sqlite3", path)
+	// Open database connection. PRAGMAs go in the DSN so they apply to every
+	// pooled connection (a one-shot Exec only configures one). WAL + a
+	// busy_timeout prevent "database is locked" under concurrent access (audit
+	// writes on most requests, the per-second WS snapshot, scheduler fetches).
+	dsn := path + "?_journal_mode=WAL&_busy_timeout=5000&_synchronous=NORMAL"
+	if foreignKeys {
+		dsn += "&_foreign_keys=on"
+	}
+	db, err := sql.Open("sqlite3", dsn)
 	if err != nil {
 		return nil, fmt.Errorf("failed to open database: %w", err)
 	}
 
-	// Set connection parameters
-	db.SetMaxOpenConns(25)
-	db.SetMaxIdleConns(5)
-
-	// Enable foreign keys if requested
-	if foreignKeys {
-		if _, err := db.Exec("PRAGMA foreign_keys = ON"); err != nil {
-			return nil, fmt.Errorf("failed to enable foreign keys: %w", err)
-		}
-	}
+	// SQLite permits a single writer; serialize all access through one
+	// connection. This control plane is low-throughput, so the cost is
+	// negligible and it removes write-contention lock errors entirely.
+	db.SetMaxOpenConns(1)
+	db.SetMaxIdleConns(1)
 
 	// Test connection
 	if err := db.Ping(); err != nil {

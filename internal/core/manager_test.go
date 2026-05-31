@@ -3,7 +3,7 @@ package core
 import "testing"
 
 func TestManagerApplyUpdatedBinaryWhenStopped(t *testing.T) {
-	m := NewManager("/old/mihomo", "/etc/mihomo", 9090, "")
+	m := NewManager("/old/mihomo", "/etc/mihomo", "/var/log/mihomo", 9090, "")
 
 	if err := m.ApplyUpdatedBinary("/new/mihomo"); err != nil {
 		t.Fatalf("apply updated binary failed: %v", err)
@@ -23,7 +23,7 @@ func TestManagerApplyUpdatedBinaryRunningWithoutConfigPath(t *testing.T) {
 }
 
 func TestManagerRestartWithoutConfigPath(t *testing.T) {
-	m := NewManager("/old/mihomo", "/etc/mihomo", 9090, "")
+	m := NewManager("/old/mihomo", "/etc/mihomo", "/var/log/mihomo", 9090, "")
 
 	if err := m.Restart(""); err == nil {
 		t.Fatalf("expected restart to fail without config path")

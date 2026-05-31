@@ -9,6 +9,9 @@ export type SystemStatus = systemApi.SystemStatus
 let ws: WebSocket | null = null
 let reconnectTimer: number | null = null
 let reconnectDelay = 1000
+// Set when the caller intentionally closes the socket, so the onclose handler
+// (which fires asynchronously after ws.close()) does not schedule a reconnect.
+let intentionalClose = false
 
 export const useSystemStore = defineStore('system', () => {
   const info = ref<SystemInfo | null>(null)
@@ -127,6 +130,7 @@ export const useSystemStore = defineStore('system', () => {
   const connectWS = (): void => {
     const token = localStorage.getItem('token')
     if (!token || ws) return
+    intentionalClose = false
 
     const proto = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
     const wsUrl = `${proto}//${window.location.host}/api/v1/system/ws?token=${encodeURIComponent(token)}`
@@ -159,6 +163,7 @@ export const useSystemStore = defineStore('system', () => {
     ws.onclose = () => {
       wsConnected.value = false
       ws = null
+      if (intentionalClose) return
       reconnectTimer = window.setTimeout(() => {
         connectWS()
       }, reconnectDelay)
@@ -171,11 +176,13 @@ export const useSystemStore = defineStore('system', () => {
   }
 
   const disconnectWS = (): void => {
+    intentionalClose = true
     if (reconnectTimer) {
       window.clearTimeout(reconnectTimer)
       reconnectTimer = null
     }
     if (ws) {
+      ws.onclose = null
       ws.close()
       ws = null
     }

@@ -51,8 +51,10 @@ mihomo:
 
 # Authentication
 auth:
-  # JWT signing secret (CHANGE IN PRODUCTION!)
-  jwt_secret: "your-secret-key-change-me"
+  # JWT signing secret. The daemon refuses to start with an empty or the
+  # literal "your-secret-key-change-me" secret. Generate a strong one for
+  # production:  openssl rand -hex 32
+  jwt_secret: "dev-insecure-secret-change-me-in-production"
   # Session timeout in seconds (24 hours)
   session_timeout: 86400
   # Max login attempts

@@ -7,8 +7,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/gin-gonic/gin"
 	"github.com/clash-proxyd/proxyd/internal/logx"
+	"github.com/gin-gonic/gin"
 
 	"go.uber.org/zap"
 )
@@ -54,18 +54,31 @@ func CORSMiddleware(allowedOrigins []string) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		origin := c.Request.Header.Get("Origin")
 
-		// Check if origin is allowed
+		// Check if origin is allowed.
 		allowed := false
+		wildcard := false
 		for _, allowedOrigin := range allowedOrigins {
-			if allowedOrigin == "*" || allowedOrigin == origin {
+			if allowedOrigin == "*" {
+				allowed, wildcard = true, true
+				break
+			}
+			if allowedOrigin == origin {
 				allowed = true
 				break
 			}
 		}
 
 		if allowed {
-			c.Writer.Header().Set("Access-Control-Allow-Origin", origin)
-			c.Writer.Header().Set("Access-Control-Allow-Credentials", "true")
+			if wildcard {
+				// Never combine a reflected origin with credentials: a literal
+				// "*" cannot carry Allow-Credentials, which closes the
+				// any-origin-with-credentials hole. JWT is sent via the
+				// Authorization header, so credentials are not required here.
+				c.Writer.Header().Set("Access-Control-Allow-Origin", "*")
+			} else {
+				c.Writer.Header().Set("Access-Control-Allow-Origin", origin)
+				c.Writer.Header().Set("Access-Control-Allow-Credentials", "true")
+			}
 			c.Writer.Header().Set("Access-Control-Allow-Headers", "Content-Type, Content-Length, Accept-Encoding, X-CSRF-Token, Authorization, accept, origin, Cache-Control, X-Requested-With")
 			c.Writer.Header().Set("Access-Control-Allow-Methods", "POST, OPTIONS, GET, PUT, DELETE, PATCH")
 		}

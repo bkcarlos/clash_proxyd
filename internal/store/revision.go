@@ -111,6 +111,40 @@ func (r *RevisionStore) List(limit int) ([]types.Revision, error) {
 	return revisions, nil
 }
 
+// ListSummary retrieves revision metadata WITHOUT the (potentially large)
+// content field — for list views that only show version/author/time/hash.
+func (r *RevisionStore) ListSummary(limit int) ([]types.Revision, error) {
+	query := `
+		SELECT id, version, source_hash, created_by, created_at
+		FROM revisions ORDER BY created_at DESC
+	`
+	args := []any{}
+	if limit > 0 {
+		query += " LIMIT ?"
+		args = append(args, limit)
+	}
+
+	rows, err := r.db.Query(query, args...)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list revisions: %w", err)
+	}
+	defer rows.Close()
+
+	revisions := make([]types.Revision, 0)
+	for rows.Next() {
+		var revision types.Revision
+		if err := rows.Scan(
+			&revision.ID, &revision.Version,
+			&revision.SourceHash, &revision.CreatedBy, &revision.CreatedAt,
+		); err != nil {
+			return nil, fmt.Errorf("failed to scan revision: %w", err)
+		}
+		revisions = append(revisions, revision)
+	}
+
+	return revisions, nil
+}
+
 // GetLatest retrieves the latest revision
 func (r *RevisionStore) GetLatest() (*types.Revision, error) {
 	query := `

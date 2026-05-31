@@ -47,6 +47,7 @@ type App struct {
 	server        *http.Server
 	webServer     *http.Server // non-nil when web UI runs on a dedicated port
 	webFS         fs.FS        // non-nil when the embedded web UI should be served
+	serverErr     chan error   // receives fatal HTTP server errors for graceful shutdown
 }
 
 // EnableWebUI registers the embedded filesystem to be served at "/".
@@ -178,6 +179,7 @@ func New(cfg *config.Config) (*App, error) {
 		updater:       updater,
 		scheduler:     sched,
 		healthChecker: healthChecker,
+		serverErr:     make(chan error, 2),
 	}, nil
 }
 
@@ -200,6 +202,14 @@ func (a *App) Start() error {
 	// Perform initial health check
 	healthStatus := a.healthChecker.Check()
 	logx.Info("Initial health check", zap.String("status", healthStatus.Status), zap.Any("services", healthStatus.Services))
+
+	// Start periodic background health monitoring.
+	a.healthChecker.StartPeriodicCheck(60 * time.Second)
+
+	// Warn loudly if the admin password is still the seeded default.
+	if a.authManager.IsDefaultPassword() {
+		logx.Warn("Admin password is still the default 'admin' — change it immediately via the UI or PUT /api/v1/auth/password")
+	}
 
 	// Ensure a minimal runtime.yaml exists so mihomo can start even on first run.
 	a.ensureBootstrapConfig()
@@ -254,7 +264,7 @@ func (a *App) Start() error {
 	go func() {
 		logx.Info("API server starting", zap.String("address", a.server.Addr))
 		if err := a.server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			logx.Fatal("API server failed", zap.Error(err))
+			a.serverErr <- fmt.Errorf("API server failed: %w", err)
 		}
 	}()
 
@@ -273,7 +283,7 @@ func (a *App) Start() error {
 		go func() {
 			logx.Info("Web UI server starting", zap.String("address", a.webServer.Addr))
 			if err := a.webServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-				logx.Fatal("Web UI server failed", zap.Error(err))
+				a.serverErr <- fmt.Errorf("web UI server failed: %w", err)
 			}
 		}()
 	}
@@ -534,6 +544,9 @@ func (a *App) logStartupSelfCheck() {
 func (a *App) Stop() error {
 	logx.Info("Shutting down application...")
 
+	// Stop background health monitoring.
+	a.healthChecker.StopPeriodicCheck()
+
 	// Stop mihomo
 	if a.mihomoManager.IsRunning() {
 		if err := a.mihomoManager.Stop(); err != nil {
@@ -590,7 +603,13 @@ func (a *App) Stop() error {
 func (a *App) Wait() {
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
-	<-quit
+
+	select {
+	case <-quit:
+		logx.Info("Shutdown signal received")
+	case err := <-a.serverErr:
+		logx.Error("Fatal server error, shutting down", zap.Error(err))
+	}
 
 	if err := a.Stop(); err != nil {
 		logx.Error("Shutdown error", zap.Error(err))

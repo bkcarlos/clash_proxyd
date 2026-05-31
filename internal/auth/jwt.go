@@ -6,9 +6,9 @@ import (
 	"strings"
 	"time"
 
+	"github.com/clash-proxyd/proxyd/internal/store"
 	"github.com/golang-jwt/jwt/v5"
 	"golang.org/x/crypto/bcrypt"
-	"github.com/clash-proxyd/proxyd/internal/store"
 )
 
 // Claims represents JWT claims
@@ -19,9 +19,9 @@ type Claims struct {
 
 // Manager manages JWT authentication
 type Manager struct {
-	secret        string
+	secret         string
 	sessionTimeout int
-	settingStore  *store.SettingStore
+	settingStore   *store.SettingStore
 }
 
 // NewManager creates a new auth manager
@@ -125,6 +125,30 @@ func (m *Manager) comparePassword(password, hash string) bool {
 // isBcryptHash reports whether s looks like a bcrypt hash.
 func isBcryptHash(s string) bool {
 	return strings.HasPrefix(s, "$2")
+}
+
+// VerifyPassword reports whether password matches the stored credentials for
+// username. Handles both bcrypt-hashed and legacy plain-text stored passwords.
+func (m *Manager) VerifyPassword(username, password string) bool {
+	storedUser, err := m.settingStore.Get("admin_username")
+	if err != nil || username != storedUser {
+		return false
+	}
+	storedPass, err := m.settingStore.Get("admin_password")
+	if err != nil {
+		return false
+	}
+	if isBcryptHash(storedPass) {
+		return m.comparePassword(password, storedPass)
+	}
+	return password == storedPass
+}
+
+// IsDefaultPassword reports whether the admin password is still the seeded
+// default ("admin"). Used to warn operators on startup.
+func (m *Manager) IsDefaultPassword() bool {
+	pass, err := m.settingStore.Get("admin_password")
+	return err == nil && pass == "admin"
 }
 
 // RefreshToken refreshes a JWT token

@@ -103,8 +103,12 @@ func (h *Handler) UpdatePassword(c *gin.Context) {
 
 	user := h.getUser(c)
 
-	// Verify old password (simplified for MVP)
-	// In production, verify old password hash
+	// Verify the current password before allowing a change.
+	if !h.authManager.VerifyPassword(user, req.OldPassword) {
+		h.respondError(c, http.StatusUnauthorized, "Current password is incorrect")
+		return
+	}
+
 	if err := h.authManager.SetCredentials(user, req.NewPassword); err != nil {
 		h.respondError(c, http.StatusInternalServerError, "Password update failed")
 		return

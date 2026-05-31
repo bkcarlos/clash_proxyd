@@ -5,7 +5,6 @@ import (
 	"net"
 	"net/http"
 	"runtime"
-	"strings"
 	"time"
 
 	"github.com/clash-proxyd/proxyd/internal/types"
@@ -220,7 +219,7 @@ func parseInt(s string) (int, error) {
 }
 
 func hydrateLastAutoUpdateSummary(info *SystemInfo, auditStore interface {
-	List(limit, offset int) ([]types.AuditLog, error)
+	LatestByResourceActionPrefix(resource, actionPrefix string) (*types.AuditLog, error)
 }) {
 	action, details, ts, ok := lastAutoUpdateSummary(auditStore)
 	if !ok {
@@ -232,7 +231,7 @@ func hydrateLastAutoUpdateSummary(info *SystemInfo, auditStore interface {
 }
 
 func hydrateLastAlertSummary(info *SystemInfo, auditStore interface {
-	List(limit, offset int) ([]types.AuditLog, error)
+	LatestByResourceActionPrefix(resource, actionPrefix string) (*types.AuditLog, error)
 }) {
 	action, details, ts, ok := lastAlertSummary(auditStore)
 	if !ok {
@@ -244,53 +243,29 @@ func hydrateLastAlertSummary(info *SystemInfo, auditStore interface {
 }
 
 func lastAutoUpdateSummary(auditStore interface {
-	List(limit, offset int) ([]types.AuditLog, error)
+	LatestByResourceActionPrefix(resource, actionPrefix string) (*types.AuditLog, error)
 }) (action, details string, at time.Time, ok bool) {
 	if auditStore == nil {
 		return "", "", time.Time{}, false
 	}
-
-	logs, err := auditStore.List(100, 0)
-	if err != nil {
+	log, err := auditStore.LatestByResourceActionPrefix("mihomo", "mihomo_update_")
+	if err != nil || log == nil {
 		return "", "", time.Time{}, false
 	}
-
-	for _, log := range logs {
-		if log.Resource != "mihomo" {
-			continue
-		}
-		if !strings.HasPrefix(log.Action, "mihomo_update_") {
-			continue
-		}
-		return log.Action, log.Details, log.CreatedAt, true
-	}
-
-	return "", "", time.Time{}, false
+	return log.Action, log.Details, log.CreatedAt, true
 }
 
 func lastAlertSummary(auditStore interface {
-	List(limit, offset int) ([]types.AuditLog, error)
+	LatestByResourceActionPrefix(resource, actionPrefix string) (*types.AuditLog, error)
 }) (action, details string, at time.Time, ok bool) {
 	if auditStore == nil {
 		return "", "", time.Time{}, false
 	}
-
-	logs, err := auditStore.List(200, 0)
-	if err != nil {
+	log, err := auditStore.LatestByResourceActionPrefix("alert", "alert_")
+	if err != nil || log == nil {
 		return "", "", time.Time{}, false
 	}
-
-	for _, log := range logs {
-		if log.Resource != "alert" {
-			continue
-		}
-		if !strings.HasPrefix(log.Action, "alert_") {
-			continue
-		}
-		return log.Action, log.Details, log.CreatedAt, true
-	}
-
-	return "", "", time.Time{}, false
+	return log.Action, log.Details, log.CreatedAt, true
 }
 
 // GetNetworkInterfaces returns local IPv4 addresses for proxy host selection.

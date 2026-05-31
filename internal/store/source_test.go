@@ -1,7 +1,6 @@
 package store
 
 import (
-	"os"
 	"path/filepath"
 	"testing"
 
@@ -19,11 +18,8 @@ func setupTestDB(t *testing.T) *DB {
 	}
 	t.Cleanup(func() { _ = db.Close() })
 
-	schema, err := os.ReadFile("schema.sql")
-	if err != nil {
-		t.Fatalf("failed to read schema: %v", err)
-	}
-	if err := db.InitSchema(string(schema)); err != nil {
+	// NewDB already auto-initializes the embedded schema; this is idempotent.
+	if err := db.InitSchema(); err != nil {
 		t.Fatalf("failed to init schema: %v", err)
 	}
 
