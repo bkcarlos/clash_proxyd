@@ -162,19 +162,34 @@ logging:
 
 ### 部署
 
-**方式一 · 一键脚本(推荐):** 下载 Release 并自动配置 systemd 服务(同上文「一键安装」):
+> 以下方式均安装到固定前缀(默认 `/opt/proxyd`)、写入绝对路径配置与随机 `jwt_secret`、创建服务用户并设置开机自启;服务以绝对路径运行,**与当前目录无关**。
+
+**方式一 · 在线一键脚本(推荐):**
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/bkcarlos/clash_proxyd/master/scripts/deploy.sh | sudo bash
 ```
 
-**方式二 · 从本地构建安装:** 先 `make build-all`,再运行仓库内的安装脚本:
+**方式二 · 离线 / 直接部署(本地压缩包,适合无法访问 GitHub 的服务器):**
+
+```bash
+# 1) 在能访问 GitHub 的机器上,从 Releases 下载对应架构的包(及可选 .sha256):
+#    https://github.com/bkcarlos/clash_proxyd/releases
+#    例如 amd64:proxyd_v1.0.2_linux_amd64.tar.gz
+# 2) 把压缩包和 scripts/deploy.sh 拷到目标服务器的同一目录,然后:
+sudo ./deploy.sh                                   # 自动识别同目录下的 proxyd_*_linux_<arch>.tar.gz
+sudo ./deploy.sh proxyd_v1.0.2_linux_amd64.tar.gz  # 或显式指定压缩包路径
+```
+
+> 自包含二进制已内置 mihomo 内核与 Country.mmdb,**安装与运行全程都无需访问 GitHub**。
+
+**方式三 · 从源码构建安装:** 先 `make build-all`,再运行仓库内的安装脚本:
 
 ```bash
 sudo ./scripts/install.sh        # 使用 ./build/proxyd 安装到 /opt/proxyd
 ```
 
-两种方式都会安装到固定前缀(默认 `/opt/proxyd`)、写入绝对路径配置与随机 `jwt_secret`、创建服务用户并设置开机自启;服务以绝对路径运行,与当前目录无关。详细指南见 [docs/deployment.md](docs/deployment.md)。
+详细指南见 [docs/deployment.md](docs/deployment.md)。
 
 ### 开发测试
 
@@ -354,19 +369,33 @@ All routes are prefixed with `/api/v1`. JWT is required except for `/health`, `/
 
 ### Deployment
 
-**Option 1 · one-line script (recommended):** downloads a release and sets up the systemd service (same as "One-line install" above):
+> Every option installs under a fixed prefix (default `/opt/proxyd`), writes an absolute-path config with a random `jwt_secret`, creates a service user, and enables start-on-boot; the service runs with absolute paths, **independent of the current directory**.
+
+**Option 1 · online one-line script (recommended):**
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/bkcarlos/clash_proxyd/master/scripts/deploy.sh | sudo bash
 ```
 
-**Option 2 · install from a local build:** run `make build-all`, then the bundled installer:
+**Option 2 · offline / direct deploy (local tarball — for servers that can't reach GitHub):**
+
+```bash
+# 1) On a machine with GitHub access, download the arch tarball (and optional .sha256):
+#    https://github.com/bkcarlos/clash_proxyd/releases   (e.g. proxyd_v1.0.2_linux_amd64.tar.gz)
+# 2) Copy the tarball + scripts/deploy.sh into one dir on the target server, then:
+sudo ./deploy.sh                                   # auto-detects ./proxyd_*_linux_<arch>.tar.gz
+sudo ./deploy.sh proxyd_v1.0.2_linux_amd64.tar.gz  # or pass the tarball explicitly
+```
+
+> The self-contained binary bundles the mihomo core + Country.mmdb, so **no GitHub access is needed at install or runtime**.
+
+**Option 3 · build from source:** run `make build-all`, then the bundled installer:
 
 ```bash
 sudo ./scripts/install.sh        # installs ./build/proxyd to /opt/proxyd
 ```
 
-Both install under a fixed prefix (default `/opt/proxyd`), write an absolute-path config with a random `jwt_secret`, create a service user, and enable start-on-boot; the service runs with absolute paths, independent of the current directory. See [docs/deployment.md](docs/deployment.md) for details.
+See [docs/deployment.md](docs/deployment.md) for details.
 
 ### Testing
 
