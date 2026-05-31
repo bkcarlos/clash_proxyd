@@ -66,7 +66,7 @@ sudo VERSION=v1.0.2 BIND_HOST=0.0.0.0 API_PORT=8080 bash deploy.sh
 
 服务管理:`systemctl {status,restart,stop} proxyd`;查看日志:`journalctl -u proxyd -f`。
 
-> 也可从 [Releases 页面](https://github.com/bkcarlos/clash_proxyd/releases) 手动下载对应架构的 `proxyd_<版本>_linux_<arch>.tar.gz`。以下是从源码构建的方式(面向开发者)。
+> **离线安装**:无法访问 GitHub 的服务器,可在其他机器上从 [Releases 页面](https://github.com/bkcarlos/clash_proxyd/releases) 下载对应架构的 `proxyd_<版本>_linux_<arch>.tar.gz`(及可选 `.sha256`),与 `deploy.sh` 一起拷到服务器后在同目录运行 `sudo ./deploy.sh`——脚本会优先使用本地压缩包,GitHub 仅作兜底。以下是从源码构建的方式(面向开发者)。
 
 #### 前置要求
 
@@ -258,7 +258,7 @@ sudo VERSION=v1.0.2 BIND_HOST=0.0.0.0 API_PORT=8080 bash deploy.sh
 
 Manage: `systemctl {status,restart,stop} proxyd`; logs: `journalctl -u proxyd -f`.
 
-> You can also download `proxyd_<version>_linux_<arch>.tar.gz` for your arch from the [Releases page](https://github.com/bkcarlos/clash_proxyd/releases). The steps below are for building from source (developers).
+> **Offline install:** on servers that can't reach GitHub, download `proxyd_<version>_linux_<arch>.tar.gz` (and optionally `.sha256`) from the [Releases page](https://github.com/bkcarlos/clash_proxyd/releases) elsewhere, copy it next to `deploy.sh` on the server, and run `sudo ./deploy.sh` — the local archive is used first, GitHub only as a fallback. The steps below are for building from source (developers).
 
 #### Prerequisites
 

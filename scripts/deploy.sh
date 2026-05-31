@@ -10,9 +10,18 @@
 #   curl -fsSL https://raw.githubusercontent.com/bkcarlos/clash_proxyd/master/scripts/deploy.sh | sudo bash
 #
 # Or, with a specific version / options:
-#   sudo VERSION=v1.0.1 ./scripts/deploy.sh
+#   sudo VERSION=v1.0.2 ./scripts/deploy.sh
+#
+# Offline / GitHub-blocked servers — install from a local tarball:
+#   On a machine with access, download proxyd_<ver>_linux_<arch>.tar.gz (and
+#   optionally its .sha256) from the Releases page, copy it + this script to the
+#   server, then run from the same directory:
+#     sudo ./deploy.sh                              # auto-detects ./proxyd_*_linux_<arch>.tar.gz
+#     sudo ./deploy.sh /path/to/proxyd_..._.tar.gz  # or pass the path explicitly
+#   The local archive is used when present; GitHub is only the fallback.
 #
 # Environment overrides (all optional):
+#   ARCHIVE=<path>            install from this local .tar.gz (skips download)
 #   VERSION=latest            release tag to install (default: latest)
 #   INSTALL_DIR=/opt/proxyd    install prefix
 #   SERVICE_USER=...           user to run the service
@@ -64,15 +73,44 @@ case "$(uname -m)" in
 esac
 info "Architecture: linux/${ARCH}"
 
-# ── Resolve version ─────────────────────────────────────────────────────────
-if [[ "$VERSION" == "latest" ]]; then
-    step "Resolving latest release of $REPO"
-    VERSION="$(curl -fsSL "https://api.github.com/repos/${REPO}/releases/latest" \
-        | grep -o '"tag_name"[[:space:]]*:[[:space:]]*"[^"]*"' | head -1 \
-        | sed 's/.*"\([^"]*\)"$/\1/')"
-    [[ -n "$VERSION" ]] || { error "Could not resolve latest release tag."; exit 1; }
+# ── Resolve archive source: local file first, else GitHub ──────────────────
+# Priority: positional arg > $ARCHIVE env > ./proxyd_*_linux_<arch>.tar.gz in CWD.
+# A local archive lets you install on servers that cannot reach GitHub.
+SRC_ARCHIVE="${1:-${ARCHIVE:-}}"
+if [[ -z "$SRC_ARCHIVE" ]]; then
+    if [[ "$VERSION" != "latest" && -f "$PWD/proxyd_${VERSION}_linux_${ARCH}.tar.gz" ]]; then
+        SRC_ARCHIVE="$PWD/proxyd_${VERSION}_linux_${ARCH}.tar.gz"
+    else
+        SRC_ARCHIVE="$(ls -1t "$PWD"/proxyd_*_linux_${ARCH}.tar.gz 2>/dev/null | head -1 || true)"
+    fi
 fi
-info "Version: ${VERSION}"
+
+if [[ -n "$SRC_ARCHIVE" ]]; then
+    [[ -f "$SRC_ARCHIVE" ]] || { error "Archive not found: $SRC_ARCHIVE"; exit 1; }
+    # Derive the version from proxyd_<ver>_linux_<arch>.tar.gz, else "local".
+    base="$(basename "$SRC_ARCHIVE")"
+    if [[ "$base" =~ ^proxyd_(.+)_linux_(amd64|arm64)\.tar\.gz$ ]]; then
+        VERSION="${BASH_REMATCH[1]}"
+        [[ "${BASH_REMATCH[2]}" == "$ARCH" ]] || warn "Archive arch '${BASH_REMATCH[2]}' differs from host arch '$ARCH'."
+    else
+        VERSION="local"
+    fi
+    info "Source: local archive — $SRC_ARCHIVE (version: ${VERSION})"
+else
+    if [[ "$VERSION" == "latest" ]]; then
+        step "Resolving latest release of $REPO"
+        VERSION="$(curl -fsSL "https://api.github.com/repos/${REPO}/releases/latest" \
+            | grep -o '"tag_name"[[:space:]]*:[[:space:]]*"[^"]*"' | head -1 \
+            | sed 's/.*"\([^"]*\)"$/\1/')"
+        if [[ -z "$VERSION" ]]; then
+            error "Could not resolve the latest release (is GitHub reachable?)."
+            error "On servers without GitHub access: download proxyd_<ver>_linux_${ARCH}.tar.gz"
+            error "elsewhere, copy it next to this script, and re-run: sudo ./deploy.sh"
+            exit 1
+        fi
+    fi
+    info "Source: GitHub release ${VERSION} (${REPO})"
+fi
 
 # ── Service user ────────────────────────────────────────────────────────────
 if [[ -z "${SERVICE_USER:-}" ]]; then
@@ -90,31 +128,47 @@ fi
 SERVICE_GROUP="$(id -gn "$SERVICE_USER")"
 info "Service runs as: ${SERVICE_USER}:${SERVICE_GROUP}"
 
-# ── Download & verify ───────────────────────────────────────────────────────
-ASSET="proxyd_${VERSION}_linux_${ARCH}.tar.gz"
-BASE_URL="https://github.com/${REPO}/releases/download/${VERSION}"
+# ── Obtain & verify the archive ─────────────────────────────────────────────
 TMP="$(mktemp -d)"
 trap 'rm -rf "$TMP"' EXIT
+ARCHIVE_TGZ="$TMP/proxyd.tar.gz"
 
-step "Downloading ${ASSET}"
-curl -fL# -o "$TMP/$ASSET" "${BASE_URL}/${ASSET}" \
-    || { error "Download failed: ${BASE_URL}/${ASSET}"; exit 1; }
-
-if curl -fsSL -o "$TMP/$ASSET.sha256" "${BASE_URL}/${ASSET}.sha256" 2>/dev/null; then
-    EXPECTED="$(awk '{print $1}' "$TMP/$ASSET.sha256")"
-    ACTUAL="$(SHA256 "$TMP/$ASSET")"
-    if [[ -n "$ACTUAL" && -n "$EXPECTED" ]]; then
-        [[ "$ACTUAL" == "$EXPECTED" ]] || { error "Checksum mismatch! expected=$EXPECTED actual=$ACTUAL"; exit 1; }
-        info "Checksum verified."
+if [[ -n "$SRC_ARCHIVE" ]]; then
+    step "Using local archive"
+    cp "$SRC_ARCHIVE" "$ARCHIVE_TGZ"
+    if [[ -f "${SRC_ARCHIVE}.sha256" ]]; then
+        EXPECTED="$(awk '{print $1}' "${SRC_ARCHIVE}.sha256")"
+        ACTUAL="$(SHA256 "$ARCHIVE_TGZ")"
+        if [[ -n "$ACTUAL" && -n "$EXPECTED" ]]; then
+            [[ "$ACTUAL" == "$EXPECTED" ]] || { error "Checksum mismatch for $SRC_ARCHIVE"; exit 1; }
+            info "Checksum verified (local .sha256)."
+        fi
     else
-        warn "Checksum tool unavailable — skipping verification."
+        warn "No sibling .sha256 — skipping checksum verification."
     fi
 else
-    warn "No .sha256 published — skipping checksum verification."
+    ASSET="proxyd_${VERSION}_linux_${ARCH}.tar.gz"
+    BASE_URL="https://github.com/${REPO}/releases/download/${VERSION}"
+    step "Downloading ${ASSET}"
+    curl -fL# -o "$ARCHIVE_TGZ" "${BASE_URL}/${ASSET}" \
+        || { error "Download failed: ${BASE_URL}/${ASSET}";
+             error "If this server can't reach GitHub, copy the tarball here and re-run (or pass its path)."; exit 1; }
+    if curl -fsSL -o "$ARCHIVE_TGZ.sha256" "${BASE_URL}/${ASSET}.sha256" 2>/dev/null; then
+        EXPECTED="$(awk '{print $1}' "$ARCHIVE_TGZ.sha256")"
+        ACTUAL="$(SHA256 "$ARCHIVE_TGZ")"
+        if [[ -n "$ACTUAL" && -n "$EXPECTED" ]]; then
+            [[ "$ACTUAL" == "$EXPECTED" ]] || { error "Checksum mismatch! expected=$EXPECTED actual=$ACTUAL"; exit 1; }
+            info "Checksum verified."
+        else
+            warn "Checksum tool unavailable — skipping verification."
+        fi
+    else
+        warn "No .sha256 published — skipping checksum verification."
+    fi
 fi
 
 step "Extracting"
-tar -xzf "$TMP/$ASSET" -C "$TMP"
+tar -xzf "$ARCHIVE_TGZ" -C "$TMP"
 BIN_SRC="$(find "$TMP" -type f -name proxyd | head -1)"
 [[ -n "$BIN_SRC" && -f "$BIN_SRC" ]] || { error "proxyd binary not found in archive."; exit 1; }
 
