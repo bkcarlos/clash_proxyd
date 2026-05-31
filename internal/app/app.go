@@ -21,6 +21,7 @@ import (
 	"github.com/clash-proxyd/proxyd/internal/core"
 	"github.com/clash-proxyd/proxyd/internal/health"
 	"github.com/clash-proxyd/proxyd/internal/logx"
+	"github.com/clash-proxyd/proxyd/internal/parser"
 	"github.com/clash-proxyd/proxyd/internal/renderer"
 	"github.com/clash-proxyd/proxyd/internal/scheduler"
 	"github.com/clash-proxyd/proxyd/internal/source"
@@ -189,6 +190,131 @@ func (a *App) InitDB() error {
 		return fmt.Errorf("failed to init schema: %w", err)
 	}
 	logx.Info("Database schema initialized")
+	return nil
+}
+
+// AddSource creates an HTTP subscription, fetches and caches its content, and —
+// when apply is true — regenerates the runtime config from all enabled sources
+// and reloads the running mihomo. Backs the -add-source CLI flag.
+func (a *App) AddSource(rawURL, name string, apply bool) error {
+	if strings.TrimSpace(rawURL) == "" {
+		return fmt.Errorf("subscription URL is required")
+	}
+	if name == "" {
+		if u, err := url.Parse(rawURL); err == nil && u.Host != "" {
+			name = u.Host
+		} else {
+			name = "subscription"
+		}
+	}
+
+	interval := a.cfg.Subscription.DefaultInterval
+	if interval <= 0 {
+		interval = 3600
+	}
+	src := &types.Source{Name: name, Type: "http", URL: rawURL, Enabled: true, UpdateInterval: interval}
+	if err := a.sourceStore.Create(src); err != nil {
+		return fmt.Errorf("create source: %w", err)
+	}
+	logx.Info("Subscription added", zap.Int("id", src.ID), zap.String("name", name), zap.String("url", rawURL))
+
+	// Fetch and cache the content now (so it's usable without a separate fetch).
+	fetcher := source.NewFetcher(a.cfg.Subscription.UserAgent, a.cfg.Subscription.Timeout, a.cfg.Subscription.MaxRetries, a.cfg.Subscription.RetryDelay)
+	content, err := fetcher.Fetch(rawURL)
+	if err != nil {
+		if apply {
+			return fmt.Errorf("subscription saved (id=%d) but fetch failed: %w", src.ID, err)
+		}
+		logx.Warn("Subscription saved but initial fetch failed", zap.Error(err))
+		return nil
+	}
+	if err := a.sourceStore.UpdateContent(src.ID, content); err != nil {
+		logx.Warn("Failed to cache subscription content", zap.Error(err))
+	}
+	logx.Info("Subscription fetched", zap.Int("bytes", len(content)))
+
+	if apply {
+		return a.regenerateAndApply()
+	}
+	return nil
+}
+
+// regenerateAndApply renders all enabled sources into the runtime config file
+// and reloads the running mihomo in place via its controller API (works across
+// processes — the daemon owns the mihomo child). If mihomo is unreachable the
+// config is still written and will be picked up the next time mihomo starts.
+func (a *App) regenerateAndApply() error {
+	enabled, err := a.sourceStore.GetEnabled()
+	if err != nil {
+		return fmt.Errorf("list enabled sources: %w", err)
+	}
+	yamlParser := parser.NewParser()
+	fetcher := source.NewFetcher(a.cfg.Subscription.UserAgent, a.cfg.Subscription.Timeout, a.cfg.Subscription.MaxRetries, a.cfg.Subscription.RetryDelay)
+
+	var configs []map[string]interface{}
+	var skipped []string
+	for i := range enabled {
+		s := &enabled[i]
+		content := []byte(s.Content)
+		if len(content) == 0 {
+			var ferr error
+			if s.Type == "http" {
+				content, ferr = fetcher.Fetch(s.URL)
+			} else {
+				content, ferr = fetcher.FetchFromFile(s.Path)
+			}
+			if ferr != nil {
+				skipped = append(skipped, fmt.Sprintf("%s (fetch: %v)", s.Name, ferr))
+				continue
+			}
+			_ = a.sourceStore.UpdateContent(s.ID, content)
+		}
+		cfg, perr := yamlParser.Parse(content)
+		if perr != nil {
+			skipped = append(skipped, fmt.Sprintf("%s (parse: %v)", s.Name, perr))
+			continue
+		}
+		configs = append(configs, cfg)
+	}
+	if len(configs) == 0 {
+		return fmt.Errorf("no usable sources to apply (skipped: %s)", strings.Join(skipped, "; "))
+	}
+
+	rendered, err := renderer.NewRenderer(&a.cfg.Policy).Render(configs)
+	if err != nil {
+		return fmt.Errorf("render config: %w", err)
+	}
+	yamlStr, err := yamlParser.ToYAMLString(rendered)
+	if err != nil {
+		return fmt.Errorf("serialize config: %w", err)
+	}
+
+	// Write to the path the daemon's mihomo uses (recorded in the runtime table),
+	// defaulting to <configDir>/runtime.yaml, so a reload picks it up.
+	path := filepath.Join(a.cfg.Mihomo.ConfigDir, "runtime.yaml")
+	if a.runtimeStore != nil {
+		if rt, gerr := a.runtimeStore.Get(); gerr == nil && rt != nil && rt.ConfigPath != "" {
+			path = rt.ConfigPath
+		}
+	}
+	if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
+		return fmt.Errorf("create config dir: %w", err)
+	}
+	if err := os.WriteFile(path, []byte(yamlStr), 0644); err != nil {
+		return fmt.Errorf("write runtime config: %w", err)
+	}
+	logx.Info("Runtime config written", zap.String("path", path), zap.Int("sources", len(configs)))
+	if len(skipped) > 0 {
+		logx.Warn("Some sources skipped", zap.Strings("skipped", skipped))
+	}
+
+	client := core.NewClient(fmt.Sprintf("http://127.0.0.1:%d", a.cfg.Mihomo.APIPort), a.cfg.Mihomo.APISecret)
+	if err := client.ReloadConfigPath(path); err != nil {
+		logx.Warn("Config written but mihomo reload failed (is mihomo running?); it will be used next time mihomo starts",
+			zap.Error(err), zap.String("path", path))
+	} else {
+		logx.Info("Mihomo reloaded with new config", zap.String("path", path))
+	}
 	return nil
 }
 

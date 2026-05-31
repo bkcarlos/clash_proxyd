@@ -150,6 +150,13 @@ func (c *Client) updateConfig(config map[string]interface{}) error {
 	return c.patch("/configs", config, nil)
 }
 
+// ReloadConfigPath asks mihomo to reload its configuration from the given file
+// via the external-controller API (PUT /configs). This works across processes,
+// so a one-shot CLI invocation can reload the mihomo owned by a running daemon.
+func (c *Client) ReloadConfigPath(path string) error {
+	return c.put("/configs", map[string]string{"path": path}, nil)
+}
+
 // get performs a GET request
 func (c *Client) get(path string, result interface{}) error {
 	return c.doRequest("GET", path, nil, result)

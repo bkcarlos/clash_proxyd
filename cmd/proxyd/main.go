@@ -32,6 +32,9 @@ func main() {
 		checkConfig  = flag.Bool("check", false, "validate the configuration file and exit")
 		showVersion  = flag.Bool("version", false, "print the proxyd version and exit")
 		mihomoAction = flag.String("mihomo", "", "control the mihomo process and exit: start|stop|restart|status")
+		addSource    = flag.String("add-source", "", "add an HTTP subscription by URL, then exit")
+		sourceName   = flag.String("name", "", "name for -add-source (default: the URL host)")
+		applyAfter   = flag.Bool("apply", true, "with -add-source: regenerate config and reload mihomo (use -apply=false to skip)")
 	)
 	flag.Parse()
 
@@ -58,6 +61,23 @@ func main() {
 	if *mihomoAction != "" {
 		if err := runMihomoControl(cfg, *mihomoAction); err != nil {
 			fatalf("mihomo %s: %v", *mihomoAction, err)
+		}
+		return
+	}
+
+	// -add-source <url>: add a subscription (optionally apply), then exit.
+	if *addSource != "" {
+		application, err := app.New(cfg)
+		if err != nil {
+			fatalf("failed to initialize application: %v", err)
+		}
+		if err := application.AddSource(*addSource, *sourceName, *applyAfter); err != nil {
+			fatalf("add-source: %v", err)
+		}
+		if *applyAfter {
+			fmt.Println("subscription added and applied")
+		} else {
+			fmt.Println("subscription added (apply via the UI, or re-run with -apply)")
 		}
 		return
 	}
